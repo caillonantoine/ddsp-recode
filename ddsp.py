@@ -24,7 +24,7 @@ class MLP(nn.Module):
         return x
 
 class Decoder(nn.Module):
-    def __init__(self, hidden_size, n_harmonic):
+    def __init__(self, hidden_size, n_partial):
         super().__init__()
         self.f0_MLP = MLP(1,hidden_size)
         self.lo_MLP = MLP(1,hidden_size)
@@ -32,7 +32,7 @@ class Decoder(nn.Module):
         self.gru    = nn.GRU(2 * hidden_size, hidden_size, batch_first=True)
 
         self.fi_MLP = MLP(hidden_size, hidden_size)
-        self.dense  = nn.Linear(hidden_size, n_harmonic)
+        self.dense  = nn.Linear(hidden_size, n_partial)
 
     def forward(self, f0, lo):
         f0 = self.f0_MLP(f0)
@@ -45,8 +45,8 @@ class Decoder(nn.Module):
         return self.dense(x)
 
 class NeuralSynth(nn.Module):
-    def __init__(self, n_harmonic, fmin, fmax):
-        self.decoder = Decoder(512, n_harmonic)
+    def __init__(self, n_partial, fmin, fmax):
+        self.decoder = Decoder(512, n_partial)
 
 if __name__ == '__main__':
     dec = Decoder(512, 100)
