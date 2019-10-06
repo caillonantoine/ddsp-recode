@@ -30,7 +30,7 @@ def process(filename, block_size, sequence_size):
                             shape=(batch, ex_sp.shape[0], ex_sp.shape[1]),
                             mode="w+"))
 
-    lo = np.memmap(f"{output}/lo.npy", dtype=np.float32, shape=(batch,sequence_size), mode="w+")
+    lo = np.zeros([batch,sequence_size])
 
     for b in tqdm(range(batch)):
         x = sound.read(block_size * sequence_size)
@@ -40,6 +40,8 @@ def process(filename, block_size, sequence_size):
         x = x.reshape(-1, block_size)
         for i,seq in enumerate(x):
             lo[b,i] = np.sqrt(np.mean(seq**2))
+
+    np.save(f"{output}/lo.npy", lo)
 
 
 if __name__ == '__main__':
