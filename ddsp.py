@@ -44,9 +44,7 @@ class Decoder(nn.Module):
 
         return self.dense(x)
 
-
-
-class DDSP_AE(nn.Module):
+class NeuralSynth(nn.Module):
     def __init__(self, n_harmonic, fmin, fmax):
         self.decoder = Decoder(512, n_harmonic)
 
