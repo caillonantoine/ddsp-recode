@@ -3,8 +3,18 @@ from ddsp import NeuralSynth
 from loader import Loader
 import torch
 import numpy as np
+import matplotlib.pyplot as plt
+import sounddevice as sd
+import soundfile as sf
+import os
+from torch.utils.tensorboard import SummaryWriter
+
+os.makedirs("temp", exist_ok=True)
+
+
 
 def train_step(model, opt_list, step, data_list):
+    opt_list[0].zero_grad()
     lo = data_list.pop(0)
     f0 = data_list.pop(0)
     stfts = data_list
@@ -14,8 +24,34 @@ def train_step(model, opt_list, step, data_list):
 
     stfts_rec = model.multiScaleFFT(output)
 
-    print([stft.shape for stft in stfts_rec])
-    print([stft.shape for stft in stfts])
+    lin_loss = sum([torch.mean(abs(stfts[i]**2 - stfts_rec[i])) for i in range(len(stfts_rec))])
+    log_loss = sum([torch.mean(torch.log(abs(stfts[i]**2 - stfts_rec[i]) + 1e-15)) for i in range(len(stfts_rec))])
+
+    if step % 10 == 0:
+        plt.figure(figsize=(15,5))
+        plt.subplot(131)
+        plt.plot(output[0].detach().cpu().numpy().reshape(-1))
+        plt.title("Rec waveform")
+
+        plt.subplot(132)
+        plt.imshow(np.log(stfts[0][0].cpu().detach().numpy()+1e-3), cmap="magma", origin="lower", aspect="auto")
+        plt.title("Original spectrogram")
+
+        plt.subplot(133)
+        plt.imshow(np.log(stfts_rec[0][0].cpu().detach().numpy()+1e-3), cmap="magma", origin="lower", aspect="auto")
+        plt.title("Reconstructed spectrogram")
+        writer.add_figure("reconstruction", plt.gcf(), step)
+        plt.close()
+
+        writer.add_audio("Reconstruction", output[0].reshape(-1), step, 16000)
+
+    loss = lin_loss + log_loss
+    # with torch.autograd.detect_anomaly():
+    loss.backward()
+    opt_list[0].step()
+
+    return {"lin_loss":lin_loss.item(),
+            "log_loss":log_loss.item()}
 
 trainer = ct.Trainer(**ct.args.__dict__)
 
@@ -30,5 +66,8 @@ trainer.set_lr(np.linspace(1e-4, 2e-5, ct.args.step))
 
 trainer.set_train_step(train_step)
 
-for elm in trainer.train_loop():
-    break
+writer = SummaryWriter(f"runs/{ct.args.name}/")
+
+for i,losses in enumerate(trainer.train_loop()):
+    for loss in losses:
+        writer.add_scalar(loss, losses[loss], i)

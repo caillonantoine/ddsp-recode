@@ -103,7 +103,7 @@ class Trainer:
                 # BACKUP PASS ##################################################
                 if current_step % self.backup_every == 0:
                     to_be_saved = [
-                            self.hparams,
+                            None,
                             self.model.state_dict(),
                             current_step
                     ]

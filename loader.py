@@ -20,9 +20,10 @@ class Loader(Dataset):
 
         # CREPE F0 #############################################################
         N = self.lo.shape[0] * self.lo.shape[1]
-        with open(preprocess.crepe_f0, "r") as crepe_f0:
-            self.f0 = np.loadtxt(crepe_f0, delimiter=",", skiprows=1)[:N,1]
-            self.f0 = self.f0.reshape([preprocess.num_batch, -1])
+        self.f0 = np.random.randn(*self.lo.shape)
+        # with open(preprocess.crepe_f0, "r") as crepe_f0:
+        #     self.f0 = np.loadtxt(crepe_f0, delimiter=",", skiprows=1)[:N,1]
+        #     self.f0 = self.f0.reshape([preprocess.num_batch, -1])
 
         self.scales = scales
 

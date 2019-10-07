@@ -5,10 +5,11 @@ class preprocess:
     crepe_f0       = f"{output_dir}/flute.f0.csv"
 
     fft_scales     = [2048, 1024, 512, 256, 128, 64] # Multi scale stft objective
-    block_size     = 160 # Must be the same block size than that of crepe !!
+    block_size     = 64 # Must be the same block size than that of crepe !!
     sequence_size  = 100 # Number of sequence to process in the GRU cell
-    num_batch      = 745 # Must be changed after preprocessing......
+    num_batch      = 1864 # Must be changed after preprocessing......
 
 class ddsp:
-    n_partial      = 50
+    n_partial      = 10
     hidden_size    = 512
+    filter_size    = 64

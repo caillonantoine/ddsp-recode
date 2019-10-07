@@ -39,7 +39,12 @@ def process(filename, block_size, sequence_size):
 
         x = x.reshape(-1, block_size)
         for i,seq in enumerate(x):
-            lo[b,i] = np.sqrt(np.mean(seq**2))
+            lo[b,i] = np.log(np.mean(seq**2)+1e-15)
+
+    mean_loudness = np.mean(lo)
+    std_loudness  = np.std(lo)
+    lo -= mean_loudness
+    lo /= std_loudness
 
     np.save(f"{output}/lo.npy", lo)
 

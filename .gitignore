@@ -2,3 +2,6 @@
 *.npy
 *.pyc
 *.csv
+runs/
+temp/
+notebooks/
