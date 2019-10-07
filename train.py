@@ -14,18 +14,24 @@ os.makedirs("temp", exist_ok=True)
 
 
 def train_step(model, opt_list, step, data_list):
-    opt_list[0].zero_grad()
-    lo = data_list.pop(0)
-    f0 = data_list.pop(0)
-    stfts = data_list
+    with torch.autograd.detect_anomaly():
+        opt_list[0].zero_grad()
+        lo = data_list.pop(0)
+        f0 = data_list.pop(0)
+        stfts = data_list
 
-    output = model(f0.unsqueeze(-1),
-                   lo.unsqueeze(-1))
+        output = model(f0.unsqueeze(-1),
+                       lo.unsqueeze(-1))
 
-    stfts_rec = model.multiScaleFFT(output)
+        stfts_rec = model.multiScaleFFT(output)
 
-    lin_loss = sum([torch.mean(abs(stfts[i]**2 - stfts_rec[i])) for i in range(len(stfts_rec))])
-    log_loss = sum([torch.mean(torch.log(abs(stfts[i]**2 - stfts_rec[i]) + 1e-15)) for i in range(len(stfts_rec))])
+        lin_loss = sum([torch.mean(abs(stfts[i]**2 - stfts_rec[i])) for i in range(len(stfts_rec))])
+        log_loss = sum([torch.mean(torch.log(abs(stfts[i]**2 - stfts_rec[i]) + 1e-15)) for i in range(len(stfts_rec))])
+
+
+        loss = lin_loss + log_loss
+        loss.backward()
+        opt_list[0].step()
 
     if step % 10 == 0:
         plt.figure(figsize=(15,5))
@@ -34,21 +40,19 @@ def train_step(model, opt_list, step, data_list):
         plt.title("Rec waveform")
 
         plt.subplot(132)
-        plt.imshow(np.log(stfts[0][0].cpu().detach().numpy()+1e-3), cmap="magma", origin="lower", aspect="auto")
+        plt.imshow(np.log(stfts[2][0].cpu().detach().numpy()+1e-3), cmap="magma", origin="lower", aspect="auto")
         plt.title("Original spectrogram")
+        plt.colorbar()
 
         plt.subplot(133)
-        plt.imshow(np.log(stfts_rec[0][0].cpu().detach().numpy()+1e-3), cmap="magma", origin="lower", aspect="auto")
+        plt.imshow(np.log(stfts_rec[2][0].cpu().detach().numpy()+1e-3), cmap="magma", origin="lower", aspect="auto")
         plt.title("Reconstructed spectrogram")
+        plt.colorbar()
         writer.add_figure("reconstruction", plt.gcf(), step)
         plt.close()
 
         writer.add_audio("Reconstruction", output[0].reshape(-1), step, 16000)
 
-    loss = lin_loss + log_loss
-    # with torch.autograd.detect_anomaly():
-    loss.backward()
-    opt_list[0].step()
 
     return {"lin_loss":lin_loss.item(),
             "log_loss":log_loss.item()}
