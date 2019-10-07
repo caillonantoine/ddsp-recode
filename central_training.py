@@ -1,9 +1,3 @@
-# @Author: Antoine Caillon <caillona>
-# @Date:   2019-04-17T10:16:33+02:00
-# @Email:  caillonantoine@gmail.com
-# @Last modified by:   caillona
-# @Last modified time: 2019-04-25T11:26:54+02:00
-
 import torch
 import json
 import argparse
@@ -22,8 +16,6 @@ class Trainer:
                  resume,
                  name,
                  dataset,
-                 hparams,
-                 parallel,
                  **kwargs):
         if cuda == -1:
             self.device = torch.device("cpu")
@@ -38,13 +30,6 @@ class Trainer:
         self.resume       = resume
         self.name         = name
         self.dataset      = dataset
-        self.parallel     = parallel
-
-        if hparams is not None:
-            with open(hparams,"r") as inp:
-                self.hparams = json.load(inp)
-        else:
-            self.hparams = None
 
         self.optim        = []
 
@@ -58,10 +43,9 @@ class Trainer:
         self.optim.append(optim)
 
     def set_dataset_loader(self, dataset_class):
-        multiplier = max(1,self.parallel)
         self.SD       = dataset_class(self.dataset)
         self.SDloader = data.DataLoader(self.SD,
-                                        batch_size=multiplier*self.batch_size,
+                                        batch_size=self.batch_size,
                                         shuffle=True,
                                         drop_last=True)
 
@@ -69,36 +53,24 @@ class Trainer:
         self.train_step = train_step_function
 
     def setup_model(self):
-        print(self.parallel)
         if self.resume is not None:
             state = torch.load(self.resume, map_location="cpu")
 
-            if self.hparams is not None:
-                self.model = self.model(**state[0])
-            else:json
-                self.model = self.model()
-
-
-            if not self.parallel:
-                self.model = self.model.to(self.device)
+            self.model = self.model()
             self.model.load_state_dict(state[1])
+
+            self.model = self.model.to(self.device)
             self.current_step = state[2] + 1
             print("Checkpoint resumed")
 
 
         else:
-            print("No checkpoint to be resumed")
-            if self.hparams is not None:
-                self.model = self.model(**self.hparams)
-            else:
-                self.model = self.model()
-            if not self.parallel:
-                self.model = self.model.to(self.device)
+            self.model = self.model()
+
+            self.model = self.model.to(self.device)
             self.current_step = 0
-json
-        if self.parallel:
-            self.model = nn.DataParallel(self.model, range(self.parallel))
-            print("Serving in parallel...")
+            print("No checkpoint to be resumed")
+
         self.model.train()
 
     def setup_optim(self):
@@ -145,42 +117,31 @@ json
 
 parser = argparse.ArgumentParser(description="Generic training script")
 parser.add_argument("--cuda", type=int, default=-1, help="GPU id to use")
-parser.add_argument("--parallel", type=int, default=0, help="Number of GPUs to use")
 parser.add_argument("--step", type=int, default=100, help="Number of epoch to train on")
 parser.add_argument("--batch-size", type=int, default=4, help="Batch size")
 parser.add_argument("--backup-every", type=int, default=100, help="Do a backup every...")
 parser.add_argument("--image-every", type=int, default=100, help="Do a image every...")
 parser.add_argument("--resume", type=str, default=None, help="Pretrained model to resume")
 parser.add_argument("--name", type=str, default="untitled", help="name of the session")
-parser.add_argument("--hparams", type=str, default=None, help="hyper parameters to use")
 parser.add_argument("dataset", type=str, help="Folder containing the dataset")
 args = parser.parse_args()
 
-#########
-# USAGE #
-#########
-#
-# import numpy as np
-#
+
+
+
 # trainer = Trainer(**args.__dict__)
-#
 # trainer.set_model(CycleGAN)
 # trainer.setup_model()
-#
 # gen_opt = torch.optim.Adam([
 #     {"params": trainer.model.GXY.parameters()},
 #     {"params": trainer.model.GYX.parameters()}
 # ])
-#
 # dis_opt = torch.optim.Adam([
 #     {"params": trainer.model.DX.parameters()},
 #     {"params": trainer.model.DY.parameters()}
 # ])
-#
 # trainer.add_optimizer(gen_opt)
 # trainer.add_optimizer(dis_opt)
 # trainer.setup_optim()
-#
-# trainer.set_dataset_loader(Loader)
-#
+# trainer.set_dataset_loader(SpeechDataset)
 # trainer.set_lr(np.linspace(1e-3,1e-4, args.step))
