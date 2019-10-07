@@ -7,4 +7,8 @@ class preprocess:
     fft_scales     = [2048, 1024, 512, 256, 128, 64] # Multi scale stft objective
     block_size     = 160 # Must be the same block size than that of crepe !!
     sequence_size  = 100 # Number of sequence to process in the GRU cell
-    num_batch      = 298 # Must be changed after preprocessing......
+    num_batch      = 745 # Must be changed after preprocessing......
+
+class ddsp:
+    n_partial      = 50
+    hidden_size    = 512

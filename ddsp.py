@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from hparams import preprocess
+from hparams import preprocess, ddsp
 
 class MLP(nn.Module):
     def __init__(self, in_size=512, out_size=512, loop=3):
@@ -48,12 +48,12 @@ class Decoder(nn.Module):
         return alpha / torch.sum(alpha,-1).unsqueeze(-1)
 
 class NeuralSynth(nn.Module):
-    def __init__(self, n_partial):
+    def __init__(self):
         super().__init__()
-        self.decoder = Decoder(512, n_partial)
+        self.decoder = Decoder(ddsp.hidden_size, ddsp.n_partial)
         self.condition_upsample = nn.Upsample(scale_factor=preprocess.block_size,
                                               mode="linear")
-        self.k = torch.arange(1, n_partial + 1)\
+        self.k = torch.arange(1, ddsp.n_partial + 1)\
                       .reshape(1,1,-1)\
                       .float()\
                       .to(self.decoder.dense.weight.device)
@@ -99,22 +99,6 @@ class NeuralSynth(nn.Module):
                            center=False)
             ))
         return stfts
-
-
-
-if __name__ == '__main__':
-    import matplotlib.pyplot as plt
-    import librosa as li
-    import sounddevice as sd
-    plt.ion()
-
-    ns = NeuralSynth(50)
-    f0 = torch.from_numpy(np.linspace(110,220,preprocess.sequence_size).reshape(1,-1,1)).float()
-    lo = torch.from_numpy(np.linspace(1,0,preprocess.sequence_size).reshape(1,-1,1)).float()
-    output = ns(f0,lo)
-
-
-
 
 
 
