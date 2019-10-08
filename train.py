@@ -8,6 +8,7 @@ import sounddevice as sd
 import soundfile as sf
 import os
 from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 
 os.makedirs("temp", exist_ok=True)
 
@@ -21,7 +22,7 @@ def train_step(model, opt_list, step, data_list):
 
     output, amp, alpha, S_noise = model(f0.unsqueeze(-1),
                                   lo.unsqueeze(-1))
-                                  
+
     # torch.Size([8, 25600]) (output)
     # torch.Size([8, 25600]) (amp)
     # torch.Size([8, 25600, 10]) (alpha)
@@ -38,7 +39,39 @@ def train_step(model, opt_list, step, data_list):
     loss.backward()
     opt_list[0].step()
 
-    if step % 10 == 0:
+    if step % 50 == 0:
+        # INFERED PARAMETERS PLOT ##############################################
+
+        plt.figure(figsize=(15,5))
+        plt.subplot(131)
+        plt.plot(amp[0].detach().cpu().numpy())
+        plt.title("Infered instrument amplitude")
+        plt.xlabel("Time (ua)")
+        plt.ylabel("Amplitude (Normalized 0-1)")
+
+        plt.subplot(132)
+
+        alpha_n = alpha.cpu().detach().numpy()[0]
+        histogram = [np.histogram(alpha_n[:,i], bins=100, range=(0,1))[0] for i in range(alpha_n.shape[-1])]
+        histogram = np.asarray(histogram)
+        plt.imshow(histogram.T, origin="lower", aspect="auto", cmap="magma")
+        plt.xlabel("Harmonic number")
+        plt.ylabel("Density")
+        plt.title("Harmonic repartition")
+
+        plt.subplot(133)
+
+        S_noise = S_noise[0].cpu().detach().numpy()
+        S_noise = S_noise[:,:,0] ** 2 + S_noise[:,:,1] ** 2
+        plt.imshow(S_noise.T, origin="lower", aspect="auto", cmap="magma")
+        plt.title("Noise output")
+        plt.xlabel("Time (ua)")
+        plt.ylabel("Frequency (ua)")
+
+        writer.add_figure("Infered parameters", plt.gcf())
+        plt.close()
+
+        # RECONSTRUCTION PLOT ##################################################
         plt.figure(figsize=(15,5))
         plt.subplot(131)
         plt.plot(output[0].detach().cpu().numpy().reshape(-1))
