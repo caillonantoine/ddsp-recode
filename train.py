@@ -4,8 +4,6 @@ from loader import Loader
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-import sounddevice as sd
-import soundfile as sf
 import os
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
@@ -25,11 +23,11 @@ def train_step(model, opt_list, step, data_list):
 
     stfts_rec = model.multiScaleFFT(output)
 
-    lin_loss = sum([torch.mean(abs(stfts[i]**2 - stfts_rec[i])) for i in range(len(stfts_rec))])
-    log_loss = sum([torch.mean(abs(torch.log(stfts[i]+1e-30) - torch.log(stfts_rec[i] + 1e-30))) for i in range(len(stfts_rec))])
+    lin_loss = sum([torch.mean(abs(stfts[i] - stfts_rec[i])) for i in range(len(stfts_rec))])
+    log_loss = sum([torch.mean(abs(torch.log(stfts[i]+1e-4) - torch.log(stfts_rec[i] + 1e-4))) for i in range(len(stfts_rec))])
 
 
-    loss = 10 * lin_loss + log_loss
+    loss = lin_loss + log_loss
     loss.backward()
     opt_list[0].step()
 
@@ -38,10 +36,10 @@ def train_step(model, opt_list, step, data_list):
 
         plt.figure(figsize=(15,5))
         plt.subplot(131)
-        plt.plot(amp[0].detach().cpu().numpy())
+        plt.plot(np.log(amp[0].detach().cpu().numpy()))
         plt.title("Infered instrument amplitude")
         plt.xlabel("Time (ua)")
-        plt.ylabel("Amplitude (Normalized 0-1)")
+        plt.ylabel("Log amplitude (dB)")
 
         plt.subplot(132)
 
@@ -72,12 +70,12 @@ def train_step(model, opt_list, step, data_list):
         plt.title("Rec waveform")
 
         plt.subplot(132)
-        plt.imshow(np.log(stfts[2][0].cpu().detach().numpy()+1e-30), cmap="magma", origin="lower", aspect="auto")
+        plt.imshow(np.log(stfts[2][0].cpu().detach().numpy()+1e-4), cmap="magma", origin="lower", aspect="auto")
         plt.title("Original spectrogram")
         plt.colorbar()
 
         plt.subplot(133)
-        plt.imshow(np.log(stfts_rec[2][0].cpu().detach().numpy()+1e-30), cmap="magma", origin="lower", aspect="auto")
+        plt.imshow(np.log(stfts_rec[2][0].cpu().detach().numpy()+1e-4), cmap="magma", origin="lower", aspect="auto")
         plt.title("Reconstructed spectrogram")
         plt.colorbar()
         writer.add_figure("reconstruction", plt.gcf(), step)

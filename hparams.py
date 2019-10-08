@@ -10,7 +10,7 @@ class preprocess:
     num_batch      = 511 # Must be changed after preprocessing......
 
 class ddsp:
-    n_partial      = 10
+    n_partial      = 8
     hidden_size    = 512
     filter_size    = 64
     impulse_time   = 2 # In second

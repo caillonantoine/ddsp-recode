@@ -3,6 +3,9 @@ import torch.nn as nn
 import numpy as np
 from hparams import preprocess, ddsp
 
+def mod_sigmoid(x):
+    return 2*torch.sigmoid(x)**np.log(10) + 1e-7
+
 class MLP(nn.Module):
     def __init__(self, in_size=512, out_size=512, loop=3):
         super().__init__()
@@ -47,11 +50,11 @@ class Decoder(nn.Module):
 
         x = self.fi_MLP(x)
 
-        amp          = torch.sigmoid(self.dense_amp(x))
-        alpha        = torch.sigmoid(self.dense_alpha(x))
-        alpha        = alpha / torch.sum(alpha,-1).unsqueeze(-1)
+        amp          = mod_sigmoid(self.dense_amp(x))
+        alpha        = mod_sigmoid(self.dense_alpha(x))
+        filter_coeff = mod_sigmoid(self.dense_filter(x))
 
-        filter_coeff = torch.sigmoid(self.dense_filter(x))
+        alpha        = alpha / torch.sum(alpha,-1).unsqueeze(-1)
 
         return amp, alpha, filter_coeff
 
@@ -66,7 +69,7 @@ class NeuralSynth(nn.Module):
 
         self.impulse = nn.Parameter(torch.zeros(1,
                                     preprocess.block_size * preprocess.sequence_size),
-                                    requires_grad=True)
+                                    requires_grad=False)
 
         for n,p in self.named_parameters():
             try:
@@ -77,7 +80,7 @@ class NeuralSynth(nn.Module):
 
         # self.impulse.data /= 10
         self.impulse.data[:,0] = 1
-        self.impulse.data[0,:] *= torch.exp(-15*torch.linspace(0,1,
+        self.impulse.data[0,:] *= torch.exp(-10*torch.linspace(0,1,
         preprocess.block_size * preprocess.sequence_size))
 
 
@@ -126,10 +129,9 @@ class NeuralSynth(nn.Module):
 
         # FREQUENCY SAMPLING FILTERING #########################################
         noise = torch.from_numpy(np.random.uniform(-1,1,y.shape))\
-                     .float().to(y.device)/100
+                     .float().to(y.device)/1000
 
         noise = noise.reshape(-1, ddsp.filter_size)
-        # noise = nn.functional.pad(noise, (0,ddsp.filter_size), "constant", 0)
         S_noise = torch.rfft(noise,1).reshape(bs,-1,ddsp.filter_size//2+1,2)
 
         filter_coef = filter_coef.reshape([-1,
@@ -140,7 +142,6 @@ class NeuralSynth(nn.Module):
         filter_coef[:,:,1] = 0
         h = torch.irfft(filter_coef, 1, signal_sizes=(ddsp.filter_size,))
         h_w = self.filter_window.unsqueeze(0) * h
-        # h_w = nn.functional.pad(h_w, (0,ddsp.filter_size), "constant", 0)
 
         H = torch.rfft(h_w, 1).reshape(bs, -1, ddsp.filter_size//2 + 1, 2)
 
@@ -187,14 +188,13 @@ class NeuralSynth(nn.Module):
         return stfts
 
 if __name__ == '__main__':
-    import crepe
     import librosa as li
     from argparse import ArgumentParser
     import soundfile as sf
 
     parser = ArgumentParser(description="Reconstruction of an input audio sample.")
     parser.add_argument("input",type=str, help="Audio to reconstruct")
-    parser.add_argument("state", type=str, help="Model state to load")
+    parser.add_argument("--state", type=str, default=None, help="Model state to load")
     args = parser.parse_args()
 
     x,fs = li.load(args.input, preprocess.samplerate)
@@ -211,11 +211,12 @@ if __name__ == '__main__':
 
 
     NS = NeuralSynth()
-    state = torch.load(args.state)[1]
-    NS.load_state_dict(state)
-    NS.cuda()
+    if args.state is not None:
+        state = torch.load(args.state)[1]
+        NS.load_state_dict(state)
+    # NS.cuda()
 
-    out,_,_,_ = NS(f0.cuda(),lo.cuda())
+    out,_,_,_ = NS(f0,lo)
     out = out.detach().cpu().numpy().reshape(-1)
 
     sf.write("reconstruction.wav", out, preprocess.samplerate)
