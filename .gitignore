@@ -2,6 +2,7 @@
 *.npy
 *.pyc
 *.csv
+*.opus
 runs/
 temp/
 notebooks/
