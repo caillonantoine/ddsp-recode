@@ -23,16 +23,10 @@ def train_step(model, opt_list, step, data_list):
     output, amp, alpha, S_noise = model(f0.unsqueeze(-1),
                                   lo.unsqueeze(-1))
 
-    # torch.Size([8, 25600]) (output)
-    # torch.Size([8, 25600]) (amp)
-    # torch.Size([8, 25600, 10]) (alpha)
-    # torch.Size([8, 400, 33, 2]) (S_noise)
-
-
     stfts_rec = model.multiScaleFFT(output)
 
     lin_loss = sum([torch.mean(abs(stfts[i]**2 - stfts_rec[i])) for i in range(len(stfts_rec))])
-    log_loss = sum([torch.mean(torch.log(abs(stfts[i]**2 - stfts_rec[i]) + 1e-4)) for i in range(len(stfts_rec))])
+    log_loss = sum([torch.mean(abs(torch.log(stfts[i]+1e-30) - torch.log(stfts_rec[i] + 1e-30))) for i in range(len(stfts_rec))])
 
 
     loss = 10 * lin_loss + log_loss
@@ -68,7 +62,7 @@ def train_step(model, opt_list, step, data_list):
         plt.xlabel("Time (ua)")
         plt.ylabel("Frequency (ua)")
 
-        writer.add_figure("Infered parameters", plt.gcf())
+        writer.add_figure("Infered parameters", plt.gcf(), step)
         plt.close()
 
         # RECONSTRUCTION PLOT ##################################################
@@ -78,12 +72,12 @@ def train_step(model, opt_list, step, data_list):
         plt.title("Rec waveform")
 
         plt.subplot(132)
-        plt.imshow(np.log(stfts[2][0].cpu().detach().numpy()+1e-3), cmap="magma", origin="lower", aspect="auto")
+        plt.imshow(np.log(stfts[2][0].cpu().detach().numpy()+1e-30), cmap="magma", origin="lower", aspect="auto")
         plt.title("Original spectrogram")
         plt.colorbar()
 
         plt.subplot(133)
-        plt.imshow(np.log(stfts_rec[2][0].cpu().detach().numpy()+1e-3), cmap="magma", origin="lower", aspect="auto")
+        plt.imshow(np.log(stfts_rec[2][0].cpu().detach().numpy()+1e-30), cmap="magma", origin="lower", aspect="auto")
         plt.title("Reconstructed spectrogram")
         plt.colorbar()
         writer.add_figure("reconstruction", plt.gcf(), step)
@@ -103,7 +97,7 @@ trainer.add_optimizer(torch.optim.Adam(trainer.model.parameters()))
 trainer.setup_optim()
 
 trainer.set_dataset_loader(Loader)
-trainer.set_lr(np.linspace(1e-4, 2e-5, ct.args.step))
+trainer.set_lr(np.linspace(1e-3, 1e-4, ct.args.step))
 
 trainer.set_train_step(train_step)
 
