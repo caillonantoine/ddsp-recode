@@ -32,8 +32,12 @@ class Decoder(nn.Module):
         self.gru    = nn.GRU(2 * hidden_size, hidden_size, batch_first=True)
 
         self.fi_MLP = MLP(hidden_size, hidden_size)
+
+        self.dense_amp    = nn.Linear(hidden_size, 1)
         self.dense_alpha  = nn.Linear(hidden_size, n_partial)
         self.dense_filter = nn.Linear(hidden_size, filter_size // 2 + 1)
+
+        self.n_partial = n_partial
 
     def forward(self, f0, lo):
         f0 = self.f0_MLP(f0)
@@ -43,10 +47,13 @@ class Decoder(nn.Module):
 
         x = self.fi_MLP(x)
 
-        alpha        = self.dense_alpha(x)
-        filter_coeff = self.dense_filter(x)
+        amp          = torch.sigmoid(self.dense_amp(x))
+        alpha        = torch.sigmoid(self.dense_alpha(x))
+        alpha        = alpha / torch.sum(alpha,-1).unsqueeze(-1)
 
-        return torch.sigmoid(alpha), torch.sigmoid(filter_coeff)
+        filter_coeff = torch.sigmoid(self.dense_filter(x))
+
+        return amp, alpha, filter_coeff
 
 class NeuralSynth(nn.Module):
     def __init__(self):
@@ -58,7 +65,8 @@ class NeuralSynth(nn.Module):
                                               mode="linear")
 
         self.impulse = nn.Parameter(torch.zeros(1,
-                                    preprocess.block_size * preprocess.sequence_size))
+                                    preprocess.block_size * preprocess.sequence_size),
+                                    requires_grad=True)
 
         for n,p in self.named_parameters():
             try:
@@ -66,6 +74,11 @@ class NeuralSynth(nn.Module):
             except:
                 # print(f"Skipped initialization of {n}")
                 pass
+
+        # self.impulse.data /= 10
+        self.impulse.data[:,0] = 1
+        self.impulse.data[0,:] *= torch.exp(-15*torch.linspace(0,1,
+        preprocess.block_size * preprocess.sequence_size))
 
 
 
@@ -89,13 +102,13 @@ class NeuralSynth(nn.Module):
         assert len(f0.shape)==3, f"f0 input must be 3-dimensional, but is {len(f0.shape)}-dimensional."
         assert len(lo.shape)==3, f"lo input must be 3-dimensional, but is {len(lo.shape)}-dimensional."
 
-        alpha, filter_coef = self.decoder(f0, lo)
+        amp, alpha, filter_coef = self.decoder(f0, lo)
 
 
         f0          = self.condition_upsample(f0.transpose(1,2))\
                           .squeeze(1)/preprocess.samplerate
 
-        lo          = self.condition_upsample(lo.transpose(1,2)).squeeze(1)
+        amp         = self.condition_upsample(amp.transpose(1,2)).squeeze(1)
         alpha       = self.condition_upsample(alpha.transpose(1,2)).transpose(1,2)
 
         phi = torch.zeros(f0.shape).to(f0.device)
@@ -108,17 +121,17 @@ class NeuralSynth(nn.Module):
 
 
         # y =  lo * torch.sum(torch.sin(self.k * phi),-1)
-        # y =  lo * torch.sum(alpha * torch.sin( self.k * phi),-1)
-        y =  torch.sum(alpha * torch.sin( self.k * phi),-1)
+        y =  amp * torch.sum(alpha * torch.sin( self.k * phi),-1)
+        # y =  torch.sum(alpha * torch.sin( self.k * phi),-1)
 
 
         # FREQUENCY SAMPLING FILTERING #########################################
         noise = torch.from_numpy(np.random.uniform(-1,1,y.shape))\
-                     .float().to(y.device)/10
+                     .float().to(y.device)/100
 
         noise = noise.reshape(-1, ddsp.filter_size)
-        noise = nn.functional.pad(noise, (0,ddsp.filter_size), "constant", 0)
-        S_noise = torch.rfft(noise,1).reshape(bs,-1,ddsp.filter_size+1,2)
+        # noise = nn.functional.pad(noise, (0,ddsp.filter_size), "constant", 0)
+        S_noise = torch.rfft(noise,1).reshape(bs,-1,ddsp.filter_size//2+1,2)
 
         filter_coef = filter_coef.reshape([bs*preprocess.sequence_size,
                                            ddsp.filter_size//2+1, 1])
@@ -128,15 +141,15 @@ class NeuralSynth(nn.Module):
         filter_coef[:,:,1] = 0
         h = torch.irfft(filter_coef, 1, signal_sizes=(ddsp.filter_size,))
         h_w = self.filter_window.unsqueeze(0) * h
-        h_w = nn.functional.pad(h_w, (0,ddsp.filter_size), "constant", 0)
+        # h_w = nn.functional.pad(h_w, (0,ddsp.filter_size), "constant", 0)
 
-        H = torch.rfft(h_w, 1).reshape(bs, -1, ddsp.filter_size + 1, 2)
+        H = torch.rfft(h_w, 1).reshape(bs, -1, ddsp.filter_size//2 + 1, 2)
 
         S_filtered_noise          = torch.zeros_like(H)
         S_filtered_noise[:,:,:,0] = H[:,:,:,0] * S_noise[:,:,:,0] - H[:,:,:,1] * S_noise[:,:,:,1]
         S_filtered_noise[:,:,:,1] = H[:,:,:,0] * S_noise[:,:,:,1] + H[:,:,:,1] * S_noise[:,:,:,0]
 
-        S_filtered_noise          = S_filtered_noise.reshape(-1, ddsp.filter_size + 1, 2)
+        S_filtered_noise          = S_filtered_noise.reshape(-1, ddsp.filter_size//2 + 1, 2)
 
         filtered_noise = torch.irfft(S_filtered_noise,1)[:,:ddsp.filter_size].reshape(bs,-1)
 
@@ -145,23 +158,24 @@ class NeuralSynth(nn.Module):
 
         # CONVOLUTION WITH AN IMPULSE RESPONSE #################################
         Y_S = torch.rfft(y,1)
-        IR_S = torch.rfft(self.impulse,1).expand_as(Y_S)
+        IR_S = torch.rfft(torch.tanh(self.impulse),1).expand_as(Y_S)
         Y_S_CONV = torch.zeros_like(IR_S)
         Y_S_CONV[:,:,0] = Y_S[:,:,0] * IR_S[:,:,0] - Y_S[:,:,1] * IR_S[:,:,1]
         Y_S_CONV[:,:,1] = Y_S[:,:,0] * IR_S[:,:,1] + Y_S[:,:,1] * IR_S[:,:,0]
 
         y_conv = torch.irfft(Y_S_CONV, 1, signal_sizes=(y.shape[-1],))
 
-        return y_conv
+        return y_conv, amp, alpha, S_filtered_noise.reshape(bs,
+                                                            preprocess.sequence_size,
+                                                            ddsp.filter_size//2+1, 2)
 
-    def multiScaleFFT(self, x, overlap=75/100):
+    def multiScaleFFT(self, x, overlap=75/100, amp = lambda x: x[:,:,:,0]**2 + x[:,:,:,1]**2):
         stfts = []
-        amp = lambda x: x[:,:,:,0]**2 + x[:,:,:,1]**2
         for i,scale in enumerate(preprocess.fft_scales):
             stfts.append(amp(
                 torch.stft(x,
                            n_fft=scale,
-                           # window=self.windows[i],
+                           window=self.windows[i],
                            hop_length=int((1-overlap)*scale),
                            center=False)
             ))

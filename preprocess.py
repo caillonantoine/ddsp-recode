@@ -4,14 +4,11 @@ import librosa as li
 from tqdm import tqdm
 import os
 from hparams import preprocess
+from ddsp import NeuralSynth
+import torch
 
-def multiScaleFFT(x, scales, overlap=75/100):
-    stfts = []
-    for scale in scales:
-        stfts.append(abs(
-            li.stft(x, n_fft=scale, hop_length=int((1-overlap)*scale), center=False)
-        ))
-    return stfts
+multiScaleFFT = NeuralSynth().multiScaleFFT
+amp = lambda x: x[:,:,0]**2 + x[:,:,1]**2
 
 def process(filename, block_size, sequence_size):
     os.makedirs("output", exist_ok=True)
@@ -24,7 +21,7 @@ def process(filename, block_size, sequence_size):
     scales = preprocess.fft_scales
     output = preprocess.output_dir
     sp = []
-    for scale, ex_sp in zip(scales,multiScaleFFT(np.random.randn(block_size * sequence_size), scales)):
+    for scale, ex_sp in zip(scales,multiScaleFFT(torch.randn(block_size * sequence_size),amp=amp)):
         sp.append(np.memmap(f"{output}/sp_{scale}.npy",
                             dtype=np.float32,
                             shape=(batch, ex_sp.shape[0], ex_sp.shape[1]),
@@ -34,8 +31,8 @@ def process(filename, block_size, sequence_size):
 
     for b in tqdm(range(batch)):
         x = sound.read(block_size * sequence_size)
-        for i,msstft in enumerate(multiScaleFFT(x, scales)):
-            sp[i][b,:,:] = msstft
+        for i,msstft in enumerate(multiScaleFFT(torch.from_numpy(x).float(), amp=amp)):
+            sp[i][b,:,:] = msstft.detach().numpy()
 
         x = x.reshape(-1, block_size)
         for i,seq in enumerate(x):
