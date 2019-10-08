@@ -89,7 +89,7 @@ class NeuralSynth(nn.Module):
         self.windows = nn.ParameterList(
         nn.Parameter(torch.from_numpy(
                 np.hanning(scale)
-            ).float(), requires_grad=True)\
+            ).float(), requires_grad=False)\
             for scale in preprocess.fft_scales)
 
         self.filter_window = nn.Parameter(torch.hann_window(ddsp.filter_size)\
