@@ -3,6 +3,7 @@
 *.pyc
 *.csv
 *.opus
+*.pth
 runs/
 temp/
 notebooks/

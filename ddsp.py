@@ -188,6 +188,7 @@ class NeuralSynth(nn.Module):
         return stfts
 
 if __name__ == '__main__':
+    import crepe
     import librosa as li
     from argparse import ArgumentParser
     import soundfile as sf
@@ -202,6 +203,12 @@ if __name__ == '__main__':
 
     f0 = crepe.predict(x,preprocess.samplerate,step_size=step_size)[1]
     lo = li.feature.rms(x, frame_length=64, hop_length=64, center=False)
+    lo = np.log(lo**2 + 1e-15)
+
+    mean, std = np.mean(lo), np.std(lo)
+
+    lo -= mean
+    lo /= std
 
     N = min(f0.shape[-1],lo.shape[-1])
     f0, lo = f0[:N],lo[:,:N]

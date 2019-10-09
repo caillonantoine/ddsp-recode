@@ -46,7 +46,7 @@ def train_step(model, opt_list, step, data_list):
         alpha_n = alpha.cpu().detach().numpy()[0]
         histogram = [np.histogram(alpha_n[:,i], bins=100, range=(0,1))[0] for i in range(alpha_n.shape[-1])]
         histogram = np.asarray(histogram)
-        plt.imshow(histogram.T, origin="lower", aspect="auto", cmap="magma")
+        plt.imshow(np.log(histogram.T+1e-3), origin="lower", aspect="auto", cmap="magma")
         plt.xlabel("Harmonic number")
         plt.ylabel("Density")
         plt.title("Harmonic repartition")
