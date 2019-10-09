@@ -69,7 +69,7 @@ class NeuralSynth(nn.Module):
 
         self.impulse = nn.Parameter(torch.zeros(1,
                                     preprocess.block_size * preprocess.sequence_size),
-                                    requires_grad=False)
+                                    requires_grad=True)
 
         for n,p in self.named_parameters():
             try:
