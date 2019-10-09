@@ -4,9 +4,38 @@ import numpy as np
 from hparams import preprocess, ddsp
 
 def mod_sigmoid(x):
+    """
+    Implementation of the modified sigmoid described in the original article.
+
+    Parameters
+    ----------
+
+    x: Tensor
+        Input tensor, of any shape
+
+    Returns
+    -------
+
+    Tensor:
+        Output tensor, shape of x
+    """
     return 2*torch.sigmoid(x)**np.log(10) + 1e-7
 
 class MLP(nn.Module):
+    """
+    Implementation of a Multi Layer Perceptron, as described in the
+    original article (see README)
+
+    Parameters
+    ----------
+
+    in_size: int
+        Input size of the MLP
+    out_size: int
+        Output size of the MLP
+    loop: int
+        Number of repetition of Linear-Norm-ReLU
+    """
     def __init__(self, in_size=512, out_size=512, loop=3):
         super().__init__()
         self.linear = nn.ModuleList(
@@ -27,6 +56,21 @@ class MLP(nn.Module):
         return x
 
 class Decoder(nn.Module):
+    """
+    Decoder of the architecture described in the original architecture.
+
+    Parameters
+    ----------
+
+    hidden_size: int
+        Size of vectors inside every MLP + GRU + Dense
+    n_partial: int
+        Number of partial involved in the harmonic generation. (>1)
+    filter_size: int
+        Size of the filter used to shape noise.
+
+
+    """
     def __init__(self, hidden_size, n_partial, filter_size):
         super().__init__()
         self.f0_MLP = MLP(1,hidden_size)
@@ -59,6 +103,10 @@ class Decoder(nn.Module):
         return amp, alpha, filter_coeff
 
 class NeuralSynth(nn.Module):
+    """
+    Implementation of a parametric Harmonic + Noise + IR reverb synthesizer,
+    whose parameters are controlled by the previously implemented decoder.
+    """
     def __init__(self):
         super().__init__()
         self.decoder = Decoder(ddsp.hidden_size,
