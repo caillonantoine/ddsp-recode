@@ -1,8 +1,8 @@
 class preprocess:
-    input_filename = "data/cello.wav" # must be a mono, 16000Hz .wav file
+    input_filename = "data/violin_16.wav" # must be a mono, 16000Hz .wav file
     samplerate     = 16000 # Used when synth back audio
     output_dir     = "output"
-    crepe_f0       = f"{output_dir}/cello.f0.csv"
+    crepe_f0       = f"{output_dir}/violin_16.f0.csv"
 
     # Multi scale stft objective
     fft_scales     = [2048, 1024, 512, 256, 128, 64]
@@ -15,7 +15,7 @@ class preprocess:
 
     # Must match the number displayed when preprocessing:
     # "Splitting data into XXXXX examples..."
-    num_batch      = 1125
+    num_batch      = 398
 
 class ddsp:
     # Number of partials involved in the harmonic signal
