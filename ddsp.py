@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from hparams import preprocess, ddsp
+import matplotlib.pyplot as plt
 
 
 class Reverb(nn.Module):
@@ -196,11 +197,9 @@ class NeuralSynth(nn.Module):
 
         phi = phi.unsqueeze(-1).expand(alpha.shape)
 
+        antia_alias = (self.k * f0.unsqueeze(-1) < .5).float()
 
-
-        # y =  lo * torch.sum(torch.sin(self.k * phi),-1)
-        y =  amp * torch.sum(alpha * torch.sin( self.k * phi),-1)
-        # y =  torch.sum(alpha * torch.sin( self.k * phi),-1)
+        y =  amp * torch.sum(antia_alias * alpha * torch.sin( self.k * phi),-1)
 
         # FREQUENCY SAMPLING FILTERING #########################################
         noise = torch.from_numpy(np.random.uniform(-1,1,y.shape))\
