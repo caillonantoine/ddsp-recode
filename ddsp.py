@@ -3,6 +3,38 @@ import torch.nn as nn
 import numpy as np
 from hparams import preprocess, ddsp
 
+
+class Reverb(nn.Module):
+    """
+    Model of a room impulse response. Two parameters controls the shape of the
+    impulse reponse: wet/dry amount and the exponential decay.
+
+    Parameters
+    ----------
+
+    size: int
+        Size of the impulse response (samples)
+    """
+    def __init__(self, size):
+        super().__init__()
+        self.size    = size
+
+        self.impulse  = nn.Parameter(torch.rand(1, size) * 2 - 1, requires_grad=False)
+        self.identity = nn.Parameter(torch.zeros(1,size), requires_grad=False)
+
+        self.impulse[:,0]  = 0
+        self.identity[:,0] = 1
+
+        self.decay   = nn.Parameter(torch.Tensor([2]), requires_grad=True)
+        self.wetdry  = nn.Parameter(torch.Tensor([2]), requires_grad=True)
+
+    def forward(self):
+        idx = torch.sigmoid(self.wetdry) * self.identity
+        imp = torch.sigmoid(1 - self.wetdry) * self.impulse
+        dcy = torch.exp(-(torch.exp(self.decay)+2) * torch.linspace(0,1, self.size))
+
+        return idx + imp * dcy
+
 def mod_sigmoid(x):
     """
     Implementation of the modified sigmoid described in the original article.
@@ -112,12 +144,9 @@ class NeuralSynth(nn.Module):
         self.decoder = Decoder(ddsp.hidden_size,
                                ddsp.n_partial,
                                ddsp.filter_size)
+
         self.condition_upsample = nn.Upsample(scale_factor=preprocess.block_size,
                                               mode="linear")
-
-        self.impulse = nn.Parameter(torch.zeros(1,
-                                    preprocess.block_size * preprocess.sequence_size),
-                                    requires_grad=False)
 
         for n,p in self.named_parameters():
             try:
@@ -125,12 +154,6 @@ class NeuralSynth(nn.Module):
             except:
                 # print(f"Skipped initialization of {n}")
                 pass
-
-        # self.impulse.data /= 10
-        self.impulse.data[:,0] = 1
-        self.impulse.data[0,:] *= torch.exp(-10*torch.linspace(0,1,
-        preprocess.block_size * preprocess.sequence_size))
-
 
 
         self.k = nn.Parameter(torch.arange(1, ddsp.n_partial + 1)\
@@ -147,8 +170,11 @@ class NeuralSynth(nn.Module):
                                                .roll(ddsp.filter_size//2,-1),
                                                requires_grad=False)
 
+        self.impulse = Reverb(preprocess.sequence_size * preprocess.block_size)
 
-    def forward(self, f0, lo):
+
+
+    def forward(self, f0, lo, noise_pass=False, conv_pass=False):
         bs = f0.shape[0]
         assert len(f0.shape)==3, f"f0 input must be 3-dimensional, but is {len(f0.shape)}-dimensional."
         assert len(lo.shape)==3, f"lo input must be 3-dimensional, but is {len(lo.shape)}-dimensional."
@@ -201,25 +227,29 @@ class NeuralSynth(nn.Module):
 
         filtered_noise = torch.irfft(S_filtered_noise,1)[:,:ddsp.filter_size].reshape(bs,-1)
 
-        y += filtered_noise
+        if noise_pass:
+            y += filtered_noise
 
 
         # CONVOLUTION WITH AN IMPULSE RESPONSE #################################
         Y_S = torch.rfft(y,1)
 
+        impulse = self.impulse()
+        
         if y.shape[-1] > preprocess.sequence_size * preprocess.block_size:
-            self.impulse.data = nn.functional.pad(self.impulse.data,
-                                                 (0, y.shape[-1]-self.impulse.shape[-1]),
-                                                 "constant", 0)
+            impulse = nn.functional.pad(impulse,
+                                        (0, y.shape[-1]-self.impulse.shape[-1]),
+                                        "constant", 0)
 
-        IR_S = torch.rfft(torch.tanh(self.impulse),1).expand_as(Y_S)
+        IR_S = torch.rfft(torch.tanh(impulse),1).expand_as(Y_S)
         Y_S_CONV = torch.zeros_like(IR_S)
         Y_S_CONV[:,:,0] = Y_S[:,:,0] * IR_S[:,:,0] - Y_S[:,:,1] * IR_S[:,:,1]
         Y_S_CONV[:,:,1] = Y_S[:,:,0] * IR_S[:,:,1] + Y_S[:,:,1] * IR_S[:,:,0]
 
-        y_conv = torch.irfft(Y_S_CONV, 1, signal_sizes=(y.shape[-1],))
+        if conv_pass:
+            y = torch.irfft(Y_S_CONV, 1, signal_sizes=(y.shape[-1],))
 
-        return y_conv, amp, alpha, S_filtered_noise.reshape(bs,
+        return y, amp, alpha, S_filtered_noise.reshape(bs,
                                                             -1,
                                                             ddsp.filter_size//2+1, 2)
 

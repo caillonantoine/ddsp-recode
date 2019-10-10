@@ -13,13 +13,18 @@ os.makedirs("temp", exist_ok=True)
 
 
 def train_step(model, opt_list, step, data_list):
+    noise_pass = True if step > 5000 else False
+    conv_pass  = True if step > 10000 else False
+
     opt_list[0].zero_grad()
     lo = data_list.pop(0)
     f0 = data_list.pop(0)
     stfts = data_list
 
     output, amp, alpha, S_noise = model(f0.unsqueeze(-1),
-                                  lo.unsqueeze(-1))
+                                  lo.unsqueeze(-1),
+                                  noise_pass,
+                                  conv_pass)
 
     stfts_rec = model.multiScaleFFT(output)
 
