@@ -19,7 +19,7 @@ class preprocess:
 
 class ddsp:
     # Number of partials involved in the harmonic signal
-    n_partial      = 100
+    n_partial      = 26
 
     hidden_size    = 512
     filter_size    = 64
