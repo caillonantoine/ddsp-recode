@@ -244,6 +244,7 @@ class NeuralSynth(nn.Module):
             IR_S = torch.rfft(torch.tanh(impulse),1).expand_as(Y_S)
         else:
             IR_S = torch.rfft(torch.tanh(impulse.detach()),1).expand_as(Y_S)
+            
         Y_S_CONV = torch.zeros_like(IR_S)
         Y_S_CONV[:,:,0] = Y_S[:,:,0] * IR_S[:,:,0] - Y_S[:,:,1] * IR_S[:,:,1]
         Y_S_CONV[:,:,1] = Y_S[:,:,0] * IR_S[:,:,1] + Y_S[:,:,1] * IR_S[:,:,0]

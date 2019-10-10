@@ -7,3 +7,4 @@
 runs/
 temp/
 notebooks/
+!showcase/*.wav
