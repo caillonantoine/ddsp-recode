@@ -31,7 +31,8 @@ class Reverb(nn.Module):
     def forward(self):
         idx = torch.sigmoid(self.wetdry) * self.identity
         imp = torch.sigmoid(1 - self.wetdry) * self.impulse
-        dcy = torch.exp(-(torch.exp(self.decay)+2) * torch.linspace(0,1, self.size))
+        dcy = torch.exp(-(torch.exp(self.decay)+2) * \
+              torch.linspace(0,1, self.size).to(self.decay.device))
 
         return idx + imp * dcy
 
@@ -235,7 +236,7 @@ class NeuralSynth(nn.Module):
         Y_S = torch.rfft(y,1)
 
         impulse = self.impulse()
-        
+
         if y.shape[-1] > preprocess.sequence_size * preprocess.block_size:
             impulse = nn.functional.pad(impulse,
                                         (0, y.shape[-1]-self.impulse.shape[-1]),
