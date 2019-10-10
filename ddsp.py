@@ -27,7 +27,7 @@ class Reverb(nn.Module):
         self.identity[:,0] = 1
 
         self.decay   = nn.Parameter(torch.Tensor([2]), requires_grad=True)
-        self.wetdry  = nn.Parameter(torch.Tensor([2]), requires_grad=True)
+        self.wetdry  = nn.Parameter(torch.Tensor([4]), requires_grad=True)
 
     def forward(self):
         idx = torch.sigmoid(self.wetdry) * self.identity
@@ -240,14 +240,15 @@ class NeuralSynth(nn.Module):
             impulse = nn.functional.pad(impulse,
                                         (0, y.shape[-1]-impulse.shape[-1]),
                                         "constant", 0)
-
-        IR_S = torch.rfft(torch.tanh(impulse),1).expand_as(Y_S)
+        if conv_pass:
+            IR_S = torch.rfft(torch.tanh(impulse),1).expand_as(Y_S)
+        else:
+            IR_S = torch.rfft(torch.tanh(impulse.detach()),1).expand_as(Y_S)
         Y_S_CONV = torch.zeros_like(IR_S)
         Y_S_CONV[:,:,0] = Y_S[:,:,0] * IR_S[:,:,0] - Y_S[:,:,1] * IR_S[:,:,1]
         Y_S_CONV[:,:,1] = Y_S[:,:,0] * IR_S[:,:,1] + Y_S[:,:,1] * IR_S[:,:,0]
 
-        if conv_pass:
-            y = torch.irfft(Y_S_CONV, 1, signal_sizes=(y.shape[-1],))
+        y = torch.irfft(Y_S_CONV, 1, signal_sizes=(y.shape[-1],))
 
         return y, amp, alpha, S_filtered_noise.reshape(bs,
                                                             -1,
