@@ -238,7 +238,7 @@ class NeuralSynth(nn.Module):
 
         if y.shape[-1] > preprocess.sequence_size * preprocess.block_size:
             impulse = nn.functional.pad(impulse,
-                                        (0, y.shape[-1]-self.impulse.shape[-1]),
+                                        (0, y.shape[-1]-impulse.shape[-1]),
                                         "constant", 0)
 
         IR_S = torch.rfft(torch.tanh(impulse),1).expand_as(Y_S)
@@ -270,23 +270,42 @@ if __name__ == '__main__':
     import librosa as li
     from argparse import ArgumentParser
     import soundfile as sf
+    from os import path
+
 
     parser = ArgumentParser(description="Reconstruction of an input audio sample.")
     parser.add_argument("input",type=str, help="Audio to reconstruct")
     parser.add_argument("--state", type=str, default=None, help="Model state to load")
+    parser.add_argument("--transpose", type=int, default=0, help="Transposition amount (semitone)")
+    parser.add_argument("--std-factor", type=int, default=1, help="Standard deviation modulation")
     args = parser.parse_args()
 
     x,fs = li.load(args.input, preprocess.samplerate)
+
     step_size = 1000 * preprocess.block_size // preprocess.samplerate
 
-    f0 = crepe.predict(x,preprocess.samplerate,step_size=step_size)[1]
-    lo = li.feature.rms(x, frame_length=64, hop_length=64, center=False)
-    lo = np.log(lo**2 + 1e-15)
+    if path.exists(path.splitext(args.input)[0] + "_f0.npy"):
+        print("Found existing crepe analysis! Yay!")
+        f0 = np.load(path.splitext(args.input)[0] + "_f0.npy")
+    else:
+        f0 = crepe.predict(x,preprocess.samplerate,step_size=step_size)[1]
+        np.save(path.splitext(args.input)[0] + "_f0.npy", f0)
+
+    lo = np.asarray([np.mean(x[i*preprocess.block_size:(i+1)*preprocess.block_size]**2)\
+          for i in range(len(x)//preprocess.block_size)])
+    lo = np.log(lo + 1e-15)
+    lo = lo.reshape(1,-1)
+
+
 
     mean, std = np.mean(lo), np.std(lo)
 
+    f0 *= 2**(args.transpose/12)
+    std *= args.std_factor
+
     lo -= mean
     lo /= std
+
 
     N = min(f0.shape[-1],lo.shape[-1])
     f0, lo = f0[:N],lo[:,:N]
@@ -297,11 +316,13 @@ if __name__ == '__main__':
 
     NS = NeuralSynth()
     if args.state is not None:
-        state = torch.load(args.state)[1]
+        state = torch.load(args.state, map_location="cpu")[1]
         NS.load_state_dict(state)
-    # NS.cuda()
 
-    out,_,_,_ = NS(f0,lo)
+    NS.impulse.decay.data  = torch.Tensor([1])
+    NS.impulse.wetdry.data = torch.Tensor([5])
+
+    out,_,_,_ = NS(f0,lo, True, True)
     out = out.detach().cpu().numpy().reshape(-1)
 
     sf.write("reconstruction.wav", out, preprocess.samplerate)
