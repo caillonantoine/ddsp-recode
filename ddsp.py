@@ -232,9 +232,16 @@ class NeuralSynth(nn.Module):
 
 
         # CONVOLUTION WITH AN IMPULSE RESPONSE #################################
+        y = nn.functional.pad(y, (0, preprocess.block_size*preprocess.sequence_size),
+                              "constant", 0)
+
         Y_S = torch.rfft(y,1)
 
         impulse = self.impulse()
+
+        impulse = nn.functional.pad(impulse,
+                                    (0, preprocess.block_size*preprocess.sequence_size),
+                                    "constant", 0)
 
         if y.shape[-1] > preprocess.sequence_size * preprocess.block_size:
             impulse = nn.functional.pad(impulse,
@@ -244,12 +251,14 @@ class NeuralSynth(nn.Module):
             IR_S = torch.rfft(torch.tanh(impulse),1).expand_as(Y_S)
         else:
             IR_S = torch.rfft(torch.tanh(impulse.detach()),1).expand_as(Y_S)
-            
+
         Y_S_CONV = torch.zeros_like(IR_S)
         Y_S_CONV[:,:,0] = Y_S[:,:,0] * IR_S[:,:,0] - Y_S[:,:,1] * IR_S[:,:,1]
         Y_S_CONV[:,:,1] = Y_S[:,:,0] * IR_S[:,:,1] + Y_S[:,:,1] * IR_S[:,:,0]
 
         y = torch.irfft(Y_S_CONV, 1, signal_sizes=(y.shape[-1],))
+
+        y = y[:,:-preprocess.block_size*preprocess.sequence_size]
 
         return y, amp, alpha, S_filtered_noise.reshape(bs,
                                                             -1,
@@ -279,7 +288,7 @@ if __name__ == '__main__':
     parser.add_argument("input",type=str, help="Audio to reconstruct")
     parser.add_argument("--state", type=str, default=None, help="Model state to load")
     parser.add_argument("--transpose", type=int, default=0, help="Transposition amount (semitone)")
-    parser.add_argument("--std-factor", type=int, default=1, help="Standard deviation modulation")
+    parser.add_argument("--std-factor", type=float, default=1, help="Standard deviation modulation")
     args = parser.parse_args()
 
     x,fs = li.load(args.input, preprocess.samplerate)
@@ -292,6 +301,7 @@ if __name__ == '__main__':
     else:
         f0 = crepe.predict(x,preprocess.samplerate,step_size=step_size)[1]
         np.save(path.splitext(args.input)[0] + "_f0.npy", f0)
+
 
     lo = np.asarray([np.mean(x[i*preprocess.block_size:(i+1)*preprocess.block_size]**2)\
           for i in range(len(x)//preprocess.block_size)])
@@ -308,7 +318,6 @@ if __name__ == '__main__':
     lo -= mean
     lo /= std
 
-
     N = min(f0.shape[-1],lo.shape[-1])
     f0, lo = f0[:N],lo[:,:N]
 
@@ -321,10 +330,9 @@ if __name__ == '__main__':
         state = torch.load(args.state, map_location="cpu")[1]
         NS.load_state_dict(state)
 
-    NS.impulse.decay.data  = torch.Tensor([1])
-    NS.impulse.wetdry.data = torch.Tensor([5])
+    with torch.no_grad():
+        out,_,_,_ = NS(f0,lo, True, True)
 
-    out,_,_,_ = NS(f0,lo, True, True)
     out = out.detach().cpu().numpy().reshape(-1)
 
     sf.write("reconstruction.wav", out, preprocess.samplerate)
