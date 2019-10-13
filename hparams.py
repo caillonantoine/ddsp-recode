@@ -8,19 +8,19 @@ class preprocess:
     fft_scales     = [2048, 1024, 512, 256, 128, 64]
 
     # Must be the same block size than that of crepe !!
-    block_size     = 64
+    block_size     = 160
 
     # Number of sequence to process in the GRU cell
-    sequence_size  = 400
+    sequence_size  = 200
 
     # Must match the number displayed when preprocessing:
     # "Splitting data into XXXXX examples..."
-    num_batch      = 398
+    num_batch      = 318
 
 class ddsp:
     # Number of partials involved in the harmonic signal
     n_partial      = 100
 
     hidden_size    = 512
-    filter_size    = 64
+    filter_size    = 160
     impulse_time   = 2 # In second

@@ -8,10 +8,6 @@ import os
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-os.makedirs("temp", exist_ok=True)
-
-
-
 def train_step(model, opt_list, step, data_list):
     noise_pass = True if step > 5000 else False
     conv_pass  = True if step > 10000 else False

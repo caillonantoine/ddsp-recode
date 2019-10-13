@@ -261,8 +261,8 @@ class NeuralSynth(nn.Module):
         y = y[:,:-preprocess.block_size*preprocess.sequence_size]
 
         return y, amp, alpha, S_filtered_noise.reshape(bs,
-                                                            -1,
-                                                            ddsp.filter_size//2+1, 2)
+                                                       -1,
+                                                       ddsp.filter_size//2+1, 2)
 
     def multiScaleFFT(self, x, overlap=75/100, amp = lambda x: x[:,:,:,0]**2 + x[:,:,:,1]**2):
         stfts = []
@@ -336,22 +336,3 @@ if __name__ == '__main__':
     out = out.detach().cpu().numpy().reshape(-1)
 
     sf.write("reconstruction.wav", out, preprocess.samplerate)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#
