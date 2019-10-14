@@ -8,3 +8,4 @@ runs/
 temp/
 notebooks/
 !showcase/*.wav
+*/build/
