@@ -54,7 +54,7 @@ void processWorker(t_ddsp_tilde *x, t_sample *in1, t_sample *in2){
       while (x->phase >= 2*PI) x->phase -= 2*PI;
 
       x->buffer[x->bufferWriteHead] = 0;
-      for (int p(1); p<PARTIAL_NUMBER; p++){
+      for (int p(1); p<30; p++){
         x->buffer[x->bufferWriteHead] += \
         x->result[0] * x->result[p] * sin(p * x->phase);
 
