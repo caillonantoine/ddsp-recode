@@ -120,11 +120,11 @@ class Decoder(nn.Module):
 
         self.n_partial = n_partial
 
-    def forward(self, f0, lo):
+    def forward(self, f0, lo, hx=None):
         f0 = self.f0_MLP(f0)
         lo = self.lo_MLP(lo)
 
-        x,_ = self.gru(torch.cat([f0, lo], -1))
+        x,h = self.gru(torch.cat([f0, lo], -1), hx)
 
         x = self.fi_MLP(x)
 
@@ -134,7 +134,7 @@ class Decoder(nn.Module):
 
         alpha        = alpha / torch.sum(alpha,-1).unsqueeze(-1)
 
-        return amp, alpha, filter_coeff
+        return amp, alpha, filter_coeff, h
 
 class NeuralSynth(nn.Module):
     """
@@ -181,7 +181,7 @@ class NeuralSynth(nn.Module):
         assert len(f0.shape)==3, f"f0 input must be 3-dimensional, but is {len(f0.shape)}-dimensional."
         assert len(lo.shape)==3, f"lo input must be 3-dimensional, but is {len(lo.shape)}-dimensional."
 
-        amp, alpha, filter_coef = self.decoder(f0, lo)
+        amp, alpha, filter_coef, h = self.decoder(f0, lo)
 
 
         f0          = self.condition_upsample(f0.transpose(1,2))\
@@ -264,6 +264,7 @@ class NeuralSynth(nn.Module):
                                                        -1,
                                                        ddsp.filter_size//2+1, 2)
 
+
     def multiScaleFFT(self, x, overlap=75/100, amp = lambda x: x[:,:,:,0]**2 + x[:,:,:,1]**2):
         stfts = []
         for i,scale in enumerate(preprocess.fft_scales):
@@ -275,6 +276,13 @@ class NeuralSynth(nn.Module):
                            center=False)
             ))
         return stfts
+
+class IncrementalNS(nn.Module):
+    def __init__(self, NS):
+        super().__init__()
+        self.NS = NS
+    def forward(self, f0, lo, hx):
+        return self.NS.decoder(f0,lo,hx)
 
 if __name__ == '__main__':
     import crepe

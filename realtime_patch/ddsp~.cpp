@@ -1,19 +1,28 @@
 #include "m_pd.h"
+#include "ddsp_core.hpp"
 #include <iostream>
+
+#define PD_BLOCK_SIZE 256
+#define MODEL_BLOCK_SIZE 160
+#define SAMPLING_RATE 16000
 
 static t_class *ddsp_tilde_class;
 
-#define PD_BLOCK_SIZE 256
 
 typedef struct _ddsp_tilde {
   t_object x_obj;
   t_sample f;
 
   float *buffer;
+  float phase;
+
+  float result[1 + PARTIAL_NUMBER + FILTER_SIZE];
 
   int bufferReadHead;
   int bufferWriteHead;
   int nextCondition;
+
+  DDSPCore *ddsp;
 
   t_inlet  *x_in2;
   t_outlet *x_out;
@@ -30,8 +39,24 @@ t_int *ddsp_tilde_perform(t_int *w)
   while (n--) *out++ = x->buffer[x->bufferReadHead++];
 
   // GET NEW SAMPLES AND WRITE THEM TO (POTENTIALLY OVERLAPPING) CURRENT WRITE
-  // BUFFER. THREADED ?
+  // BUFFER.
 
+  float f0[2];
+  float lo[2];
+
+  while (x->nextCondition < PD_BLOCK_SIZE) {
+    f0[0] = f0[1];
+    lo[0] = lo[1];
+    f0[1] = in1[x->nextCondition];
+    lo[1] = in2[x->nextCondition];
+
+    x->ddsp->getNextOutput(in1[x->nextCondition], in2[x->nextCondition], x->result);
+    x->nextCondition += MODEL_BLOCK_SIZE;
+
+    
+  }
+
+  x->nextCondition = x->nextCondition % PD_BLOCK_SIZE;
   x->bufferReadHead = x->bufferReadHead % (2 * PD_BLOCK_SIZE);
   x->bufferWriteHead = PD_BLOCK_SIZE - x->bufferReadHead;
 
@@ -48,6 +73,7 @@ void ddsp_tilde_dsp(t_ddsp_tilde *x, t_signal **sp)
 void ddsp_tilde_free(t_ddsp_tilde *x)
 {
   free(x->buffer);
+  free(x->ddsp);
   inlet_free(x->x_in2);
   outlet_free(x->x_out);
 }
@@ -57,10 +83,13 @@ void *ddsp_tilde_new(t_floatarg f)
   t_ddsp_tilde *x = (t_ddsp_tilde *)pd_new(ddsp_tilde_class);
 
   x->buffer = (float *) malloc(2 * PD_BLOCK_SIZE * sizeof(float));
+  x->phase  = 0;
 
   x->bufferReadHead  = 0;
   x->bufferWriteHead = PD_BLOCK_SIZE;
   x->nextCondition   = 0;
+
+  x->ddsp = new DDSPCore();
 
   x->x_in2=inlet_new(&x->x_obj, &x->x_obj.ob_pd, &s_signal, &s_signal);
 

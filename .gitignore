@@ -4,6 +4,7 @@
 *.csv
 *.opus
 *.pth
+*.torchscript
 runs/
 temp/
 notebooks/
