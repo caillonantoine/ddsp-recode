@@ -1,5 +1,5 @@
 import torch
-from ddsp import NeuralSynth, IncrementalNS
+from torch_ddsp.ddsp import NeuralSynth, IncrementalNS
 import argparse
 
 parser = argparse.ArgumentParser(description="Conversion of a pretrained DDSP model to torchscript")

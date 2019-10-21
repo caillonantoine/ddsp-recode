@@ -1,5 +1,5 @@
-import central_training as ct
-from ddsp import NeuralSynth
+import torch_ddsp.central_training as ct
+from torch_ddsp.ddsp import NeuralSynth
 from loader import Loader
 import torch
 import numpy as np

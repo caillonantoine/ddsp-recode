@@ -3,8 +3,8 @@ import soundfile as sf
 import librosa as li
 from tqdm import tqdm
 import os
-from hparams import preprocess
-from ddsp import NeuralSynth
+from torch_ddsp.hparams import preprocess
+from torch_ddsp.ddsp import NeuralSynth
 import torch
 
 multiScaleFFT = NeuralSynth().multiScaleFFT
