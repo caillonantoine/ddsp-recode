@@ -8,6 +8,7 @@ from torch_ddsp.ddsp import NeuralSynth
 import torch
 from glob import glob
 from pyworld import dio
+import crepe
 
 multiScaleFFT = NeuralSynth().multiScaleFFT
 amp = lambda x: x[:,:,0]**2 + x[:,:,1]**2
@@ -27,10 +28,13 @@ def getFundamentalFrequency(x):
     block_size = preprocess.block_size
     hop = int(1000 * block_size / sr)
 
-    f0 = dio(x.astype(np.float64), sr,
-             frame_period=hop,
-             f0_floor=50,
-             f0_ceil=2000)[0]
+    if preprocess.f0_estimation == "dio":
+        f0 = dio(x.astype(np.float64), sr,
+                 frame_period=hop,
+                 f0_floor=50,
+                 f0_ceil=2000)[0]
+    elif preprocess.f0_estimation == "crepe":
+        f0 = crepe.predict(x, sr, step_size=hop)[1]
 
     return f0[:preprocess.sequence_size].astype(np.float)
 

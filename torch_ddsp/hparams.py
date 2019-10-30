@@ -2,7 +2,10 @@ class preprocess:
     input_filename = "data/*.wav" # must be a mono, 16000Hz .wav file
     samplerate     = 16000 # Used when synth back audio
     output_dir     = "output"
-    crepe_f0       = f"{output_dir}/violin_16.f0.csv"
+
+    # F0 ESTIMATION ALGORITHM (dio or crepe) ###################################
+    f0_estimation = "crepe"
+
 
     # Multi scale stft objective
     fft_scales     = [2048, 1024, 512, 256, 128, 64]
@@ -26,7 +29,7 @@ class ddsp:
     conv_hidden_size = 128
     conv_out_size    = 2
     conv_kernel_size = 15
-    
+
     # Number of partials involved in the harmonic signal
     n_partial      = 100
 
