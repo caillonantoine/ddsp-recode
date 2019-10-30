@@ -1,6 +1,7 @@
 import torch_ddsp.central_training as ct
 from torch_ddsp.ddsp import NeuralSynth
 from torch_ddsp.loader import Loader
+from torch_ddsp import hparams
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
@@ -20,19 +21,23 @@ def train_step(model, opt_list, step, data_list):
     f0        = data_list.pop(0)
     stfts     = data_list
 
-    output, amp, alpha, S_noise = model(raw_audio.unsqueeze(1),
-                                  f0.unsqueeze(-1),
-                                  lo.unsqueeze(-1),
-                                  noise_pass,
-                                  conv_pass)
+    z, output, amp, alpha, S_noise = model(raw_audio.unsqueeze(1),
+                                           f0.unsqueeze(-1),
+                                           lo.unsqueeze(-1),
+                                           noise_pass,
+                                           conv_pass)
 
     stfts_rec = model.multiScaleFFT(output)
 
     lin_loss = sum([torch.mean(abs(stfts[i] - stfts_rec[i])) for i in range(len(stfts_rec))])
     log_loss = sum([torch.mean(abs(torch.log(stfts[i]+1e-4) - torch.log(stfts_rec[i] + 1e-4))) for i in range(len(stfts_rec))])
 
+    z_mean,z_var = z
+    reg_loss = torch.mean(torch.exp(z_var)**2 + z_mean**2 - z_var - 1)
 
-    loss = lin_loss + log_loss
+
+    loss = lin_loss + log_loss + .1 * reg_loss
+
     loss.backward()
     opt_list[0].step()
 
@@ -89,7 +94,8 @@ def train_step(model, opt_list, step, data_list):
         writer.add_audio("Reconstruction", output[0].reshape(-1)/torch.max(output[0].reshape(-1)), step, 16000)
 
     return {"lin_loss":lin_loss.item(),
-            "log_loss":log_loss.item()}
+            "log_loss":log_loss.item(),
+            "kl_loss":reg_loss.item()}
 
 trainer = ct.Trainer(**ct.args.__dict__)
 

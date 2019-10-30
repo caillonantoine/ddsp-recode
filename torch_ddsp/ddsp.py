@@ -110,7 +110,7 @@ class Encoder(nn.Module):
                           stride=ddsp.strides[i]) for i in range(1, len(ddsp.strides)-1)
             ]+\
             [nn.Conv1d(ddsp.conv_hidden_size,
-                       ddsp.conv_out_size,
+                       2 * ddsp.conv_out_size,
                        ddsp.conv_kernel_size,
                        padding=ddsp.conv_kernel_size//2,
                        stride=ddsp.strides[-1])]
@@ -122,7 +122,9 @@ class Encoder(nn.Module):
             x = conv(x)
             if i != len(self.convs)-1:
                 x = torch.relu(x)
-        return x.transpose(1,2).contiguous()
+        z_mean, z_var = torch.split(x.transpose(1,2), ddsp.conv_out_size,-1)
+        return z_mean.contiguous(), z_var.contiguous()
+
 
 class Decoder(nn.Module):
     """
@@ -159,7 +161,13 @@ class Decoder(nn.Module):
     def forward(self, z, f0, lo, hx=None):
         f0 = self.f0_MLP(f0)
         lo = self.lo_MLP(lo)
+
+        z_mean, z_var = z
+        z = torch.exp(z_var) * torch.randn_like(z_mean) + z_mean
         z  = self.z_MLP(z)
+
+
+
 
         x,h = self.gru(torch.cat([z, f0, lo], -1), hx)
 
@@ -310,7 +318,7 @@ class NeuralSynth(nn.Module):
 
         y = y[:,:-preprocess.block_size*preprocess.sequence_size]
 
-        return y, amp, alpha, S_filtered_noise.reshape(bs,
+        return z, y, amp, alpha, S_filtered_noise.reshape(bs,
                                                        -1,
                                                        preprocess.block_size//2+1, 2)
 
