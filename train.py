@@ -1,6 +1,6 @@
 import torch_ddsp.central_training as ct
 from torch_ddsp.ddsp import NeuralSynth
-from loader import Loader
+from torch_ddsp.loader import Loader
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
@@ -13,11 +13,15 @@ def train_step(model, opt_list, step, data_list):
     conv_pass  = True if step > 500 else False
 
     opt_list[0].zero_grad()
-    lo = data_list.pop(0)
-    f0 = data_list.pop(0)
-    stfts = data_list
 
-    output, amp, alpha, S_noise = model(f0.unsqueeze(-1),
+    idx       = data_list.pop(0)
+    raw_audio = data_list.pop(0)
+    lo        = data_list.pop(0)
+    f0        = data_list.pop(0)
+    stfts     = data_list
+
+    output, amp, alpha, S_noise = model(raw_audio.unsqueeze(1),
+                                  f0.unsqueeze(-1),
                                   lo.unsqueeze(-1),
                                   noise_pass,
                                   conv_pass)

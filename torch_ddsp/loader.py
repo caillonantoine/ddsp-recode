@@ -1,7 +1,7 @@
 from torch.utils.data import Dataset
 import numpy as np
 import torch
-from hparams import preprocess
+from .hparams import preprocess
 
 class Loader(Dataset):
     def __init__(self, dir):
@@ -18,12 +18,14 @@ class Loader(Dataset):
         # LOUDNESS #############################################################
         self.lo = np.load(f"{dir}/lo.npy")
 
-        # CREPE F0 #############################################################
-        N = self.lo.shape[0] * self.lo.shape[1]
-        # self.f0 = np.random.randn(*self.lo.shape)
-        with open(preprocess.crepe_f0, "r") as crepe_f0:
-            self.f0 = np.loadtxt(crepe_f0, delimiter=",", skiprows=1)[:N,1]
-            self.f0 = self.f0.reshape([preprocess.num_batch, -1])
+        # DIO F0 ###############################################################
+        self.f0 = np.load(f"{dir}/f0.npy")
+
+        # INDEX ################################################################
+        self.index = np.load(f"{dir}/index.npy")
+
+        # AUDIO ################################################################
+        self.raw_audio = np.load(f"{dir}/raw_audio.npy")
 
         self.scales = scales
 
@@ -31,7 +33,10 @@ class Loader(Dataset):
         return self.lo.shape[0]
 
     def __getitem__(self, i):
-        memmap = [self.lo[i], self.f0[i]] + [sp[i] for sp in self.sp]
+        memmap = [np.asarray([self.index[i]]),
+                  self.raw_audio[i],
+                  self.lo[i],
+                  self.f0[i]] + [sp[i] for sp in self.sp]
         return [torch.from_numpy(elm).float() for elm in memmap]
 
 
