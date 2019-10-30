@@ -92,6 +92,7 @@ def train_step(model, opt_list, step, data_list):
         plt.close()
 
         writer.add_audio("Reconstruction", output[0].reshape(-1)/torch.max(output[0].reshape(-1)), step, 16000)
+        writer.add_audio("Original", raw_audio[0].reshape(-1), step, 16000)
 
     return {"lin_loss":lin_loss.item(),
             "log_loss":log_loss.item(),
