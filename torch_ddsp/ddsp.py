@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from .hparams import preprocess, ddsp
+# from hparams import preprocess, ddsp
 import matplotlib.pyplot as plt
 
 
@@ -89,6 +90,40 @@ class MLP(nn.Module):
             x = lin(x)
         return x
 
+class Encoder(nn.Module):
+    """
+    Raw waveform encoder, based on VQVAE
+    """
+    def __init__(self):
+        super().__init__()
+        self.convs = nn.ModuleList(
+            [nn.Conv1d(1,
+                        ddsp.conv_hidden_size,
+                        ddsp.conv_kernel_size,
+                        padding=ddsp.conv_kernel_size//2,
+                        stride=ddsp.strides[0])]+\
+            [
+                nn.Conv1d(ddsp.conv_hidden_size,
+                          ddsp.conv_hidden_size,
+                          ddsp.conv_kernel_size,
+                          padding=ddsp.conv_kernel_size//2,
+                          stride=ddsp.strides[i]) for i in range(1, len(ddsp.strides)-1)
+            ]+\
+            [nn.Conv1d(ddsp.conv_hidden_size,
+                       ddsp.conv_out_size,
+                       ddsp.conv_kernel_size,
+                       padding=ddsp.conv_kernel_size//2,
+                       stride=ddsp.strides[-1])]
+        )
+
+
+    def forward(self, x):
+        for i,conv in enumerate(self.convs):
+            x = conv(x)
+            if i != len(self.convs)-1:
+                x = torch.relu(x)
+        return x.transpose(1,2).contiguous()
+
 class Decoder(nn.Module):
     """
     Decoder of the architecture described in the original architecture.
@@ -109,8 +144,9 @@ class Decoder(nn.Module):
         super().__init__()
         self.f0_MLP = MLP(1,hidden_size)
         self.lo_MLP = MLP(1,hidden_size)
+        self.z_MLP  = MLP(ddsp.conv_out_size, hidden_size)
 
-        self.gru    = nn.GRU(2 * hidden_size, hidden_size, batch_first=True)
+        self.gru    = nn.GRU(3 * hidden_size, hidden_size, batch_first=True)
 
         self.fi_MLP = MLP(hidden_size, hidden_size)
 
@@ -120,11 +156,12 @@ class Decoder(nn.Module):
 
         self.n_partial = n_partial
 
-    def forward(self, f0, lo, hx=None):
+    def forward(self, z, f0, lo, hx=None):
         f0 = self.f0_MLP(f0)
         lo = self.lo_MLP(lo)
+        z  = self.z_MLP(z)
 
-        x,h = self.gru(torch.cat([f0, lo], -1), hx)
+        x,h = self.gru(torch.cat([z, f0, lo], -1), hx)
 
         x = self.fi_MLP(x)
 
@@ -143,6 +180,8 @@ class NeuralSynth(nn.Module):
     """
     def __init__(self):
         super().__init__()
+        self.encoder = Encoder()
+
         self.decoder = Decoder(ddsp.hidden_size,
                                ddsp.n_partial,
                                ddsp.filter_size)
@@ -176,56 +215,67 @@ class NeuralSynth(nn.Module):
 
 
 
-    def forward(self, f0, lo, noise_pass=False, conv_pass=False):
+    def forward(self, x, f0, lo, noise_pass=False, conv_pass=False):
         bs = f0.shape[0]
         assert len(f0.shape)==3, f"f0 input must be 3-dimensional, but is {len(f0.shape)}-dimensional."
         assert len(lo.shape)==3, f"lo input must be 3-dimensional, but is {len(lo.shape)}-dimensional."
 
-        amp, alpha, filter_coef, h = self.decoder(f0, lo)
+        # Z ENCODING OF AUDIO ##################################################
+        z = self.encoder(x)
+
+        # ADDITIVE SYNTH #######################################################
+        # GETTING SYNTH PARAMETERS
+        amp, alpha, filter_coef, h = self.decoder(z, f0, lo)
 
 
+        # UPSAMPLING PARAMETERS TO SAMPLERATE
         f0          = self.condition_upsample(f0.transpose(1,2))\
                           .squeeze(1)/preprocess.samplerate
-
         amp         = self.condition_upsample(amp.transpose(1,2)).squeeze(1)
         alpha       = self.condition_upsample(alpha.transpose(1,2)).transpose(1,2)
 
+        # GENERATING PHASE
         phi = torch.zeros(f0.shape).to(f0.device)
-
         for i in np.arange(1,phi.shape[-1]):
             phi[:,i] = 2 * np.pi * f0[:,i] + phi[:,i-1]
-
         phi = phi.unsqueeze(-1).expand(alpha.shape)
 
+        # FILTERING OUT FREQUENCIES ABOVE NYQUIST
         antia_alias = (self.k * f0.unsqueeze(-1) < .5).float()
 
         y =  amp * torch.sum(antia_alias * alpha * torch.sin( self.k * phi),-1)
 
-        # FREQUENCY SAMPLING FILTERING #########################################
-        noise = torch.from_numpy(np.random.uniform(-1,1,y.shape))\
-                     .float().to(y.device)/1000
+        # NOISE SHAPING ########################################################
 
-        noise = noise.reshape(-1, ddsp.filter_size)
-        S_noise = torch.rfft(noise,1).reshape(bs,-1,ddsp.filter_size//2+1,2)
+        # CREATING SOURCE NOISE
+        noise = (torch.rand(y.shape)*2-1)\
+                .to(y.device)\
+                .reshape(-1, preprocess.block_size)
+        S_noise = torch.rfft(noise,1).reshape(bs,-1,preprocess.block_size//2+1,2)
 
-        filter_coef = filter_coef.reshape([-1,
-                                           ddsp.filter_size//2+1, 1])
-        filter_coef = filter_coef.expand([-1,
-                                          ddsp.filter_size//2+1, 2]).contiguous()
-
+        # FORMATTING FILTER_COEF TO COMPLEX FORM
+        filter_coef = filter_coef.reshape([-1, ddsp.filter_size//2+1, 1])\
+                      .expand([-1, ddsp.filter_size//2+1, 2]).contiguous()
         filter_coef[:,:,1] = 0
+
+        # COMPUTING FILTER WINDOWED IMPULSE RESPONSE
         h = torch.irfft(filter_coef, 1, signal_sizes=(ddsp.filter_size,))
         h_w = self.filter_window.unsqueeze(0) * h
+        h_w = nn.functional.pad(h_w, (0,preprocess.block_size-ddsp.filter_size),
+                                "constant", 0)
 
-        H = torch.rfft(h_w, 1).reshape(bs, -1, ddsp.filter_size//2 + 1, 2)
+        H = torch.rfft(h_w, 1).reshape(bs, -1, preprocess.block_size//2 + 1, 2)
+
 
         S_filtered_noise          = torch.zeros_like(H)
         S_filtered_noise[:,:,:,0] = H[:,:,:,0] * S_noise[:,:,:,0] - H[:,:,:,1] * S_noise[:,:,:,1]
         S_filtered_noise[:,:,:,1] = H[:,:,:,0] * S_noise[:,:,:,1] + H[:,:,:,1] * S_noise[:,:,:,0]
 
-        S_filtered_noise          = S_filtered_noise.reshape(-1, ddsp.filter_size//2 + 1, 2)
+        S_filtered_noise          = S_filtered_noise.reshape(-1, preprocess.block_size//2 + 1, 2)
 
-        filtered_noise = torch.irfft(S_filtered_noise,1)[:,:ddsp.filter_size].reshape(bs,-1)
+        filtered_noise = torch.irfft(S_filtered_noise,1)[:,:preprocess.block_size].reshape(bs,-1)
+
+
 
         if noise_pass:
             y += filtered_noise
@@ -248,9 +298,9 @@ class NeuralSynth(nn.Module):
                                         (0, y.shape[-1]-impulse.shape[-1]),
                                         "constant", 0)
         if conv_pass:
-            IR_S = torch.rfft(torch.tanh(impulse),1).expand_as(Y_S)
+            IR_S = torch.rfft(impulse,1).expand_as(Y_S)
         else:
-            IR_S = torch.rfft(torch.tanh(impulse.detach()),1).expand_as(Y_S)
+            IR_S = torch.rfft(impulse.detach(),1).expand_as(Y_S)
 
         Y_S_CONV = torch.zeros_like(IR_S)
         Y_S_CONV[:,:,0] = Y_S[:,:,0] * IR_S[:,:,0] - Y_S[:,:,1] * IR_S[:,:,1]
@@ -262,7 +312,7 @@ class NeuralSynth(nn.Module):
 
         return y, amp, alpha, S_filtered_noise.reshape(bs,
                                                        -1,
-                                                       ddsp.filter_size//2+1, 2)
+                                                       preprocess.block_size//2+1, 2)
 
 
     def multiScaleFFT(self, x, overlap=75/100, amp = lambda x: x[:,:,:,0]**2 + x[:,:,:,1]**2):
@@ -283,3 +333,15 @@ class IncrementalNS(nn.Module):
         self.NS = NS
     def forward(self, f0, lo, hx):
         return self.NS.decoder(f0,lo,hx)
+
+if __name__ == '__main__':
+    NOISE_PASS = True
+    REVERB_PASS = True
+
+    f0 = torch.randn(1,10,1)
+    lo = torch.randn(1,10,1)
+    z  = torch.randn(1,10,2)
+
+    NS = NeuralSynth()
+
+    out = NS(z, f0, lo, NOISE_PASS, REVERB_PASS)
