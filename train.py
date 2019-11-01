@@ -10,8 +10,8 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 def train_step(model, opt_list, step, data_list):
-    noise_pass = True if step > 5000 else False
-    conv_pass  = True if step > 5000 else False
+    noise_pass = True if step > 0 else False
+    conv_pass  = True if step > 0 else False
 
     opt_list[0].zero_grad()
 
