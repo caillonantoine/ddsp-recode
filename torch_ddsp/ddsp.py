@@ -27,14 +27,14 @@ class Reverb(nn.Module):
         self.impulse[:,0]  = 0
         self.identity[:,0] = 1
 
-        self.decay   = nn.Parameter(torch.Tensor([2]), requires_grad=True)
-        self.wetdry  = nn.Parameter(torch.Tensor([4]), requires_grad=True)
+    def forward(self, x):
+        wetdry = x[:,0].unsqueeze(-1)
+        decay  = x[:,1].unsqueeze(-1)
 
-    def forward(self):
-        idx = torch.sigmoid(self.wetdry) * self.identity
-        imp = torch.sigmoid(1 - self.wetdry) * self.impulse
-        dcy = torch.exp(-(torch.exp(self.decay)+2) * \
-              torch.linspace(0,1, self.size).to(self.decay.device))
+        idx = torch.sigmoid(wetdry) * self.identity
+        imp = torch.sigmoid(1 - wetdry) * self.impulse
+        dcy = torch.exp(-(torch.exp(decay)+2) * \
+              torch.linspace(0,1, self.size).to(x.device))
 
         return idx + imp * dcy
 
@@ -155,6 +155,7 @@ class Decoder(nn.Module):
         self.dense_amp    = nn.Linear(hidden_size, 1)
         self.dense_alpha  = nn.Linear(hidden_size, n_partial)
         self.dense_filter = nn.Linear(hidden_size, filter_size // 2 + 1)
+        self.dense_reverb = nn.Linear(hidden_size, 2)
 
         self.n_partial = n_partial
 
@@ -176,10 +177,11 @@ class Decoder(nn.Module):
         amp          = mod_sigmoid(self.dense_amp(x))
         alpha        = mod_sigmoid(self.dense_alpha(x))
         filter_coeff = mod_sigmoid(self.dense_filter(x))
+        reverb       = self.dense_reverb(x)
 
         alpha        = alpha / torch.sum(alpha,-1).unsqueeze(-1)
 
-        return amp, alpha, filter_coeff, h
+        return amp, alpha, filter_coeff, h, reverb
 
 class NeuralSynth(nn.Module):
     """
@@ -233,7 +235,9 @@ class NeuralSynth(nn.Module):
 
         # ADDITIVE SYNTH #######################################################
         # GETTING SYNTH PARAMETERS
-        amp, alpha, filter_coef, h = self.decoder(z, f0, lo)
+        amp, alpha, filter_coef, h, reverb = self.decoder(z, f0, lo)
+
+        reverb = torch.mean(reverb, 1)
 
 
         # UPSAMPLING PARAMETERS TO SAMPLERATE
@@ -295,7 +299,7 @@ class NeuralSynth(nn.Module):
 
         Y_S = torch.rfft(y,1)
 
-        impulse = self.impulse()
+        impulse = self.impulse(reverb)
 
         impulse = nn.functional.pad(impulse,
                                     (0, preprocess.block_size*preprocess.sequence_size),
