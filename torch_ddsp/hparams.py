@@ -38,3 +38,6 @@ class ddsp:
 
     # Noise shaping filter size
     filter_size    = 64
+
+    # Number of step with add synth alone
+    warmup         = 2000

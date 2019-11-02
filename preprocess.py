@@ -57,7 +57,8 @@ class BatchSoundFiles:
 
 
 def process(filename, block_size, sequence_size):
-    os.makedirs("output", exist_ok=True)
+    output = preprocess.output_dir
+    os.makedirs(output, exist_ok=True)
 
     sound = BatchSoundFiles(glob(filename))
     batch = len(sound) // (block_size * sequence_size)
@@ -65,7 +66,6 @@ def process(filename, block_size, sequence_size):
 
 
     scales = preprocess.fft_scales
-    output = preprocess.output_dir
     sp = []
     for scale, ex_sp in zip(scales,multiScaleFFT(torch.randn(block_size * sequence_size),amp=amp)):
         sp.append(np.memmap(f"{output}/sp_{scale}.npy",
