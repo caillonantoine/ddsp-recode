@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 def train_step(model, opt_list, step, data_list):
     noise_pass = True if step > hparams.ddsp.warmup else False
-    conv_pass  = True if step > hparams.ddsp.warmup else False
+    conv_pass  = True #if step > hparams.ddsp.warmup else False
 
     opt_list[0].zero_grad()
 

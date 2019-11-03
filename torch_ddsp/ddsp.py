@@ -262,7 +262,7 @@ class NeuralSynth(nn.Module):
         # CREATING SOURCE NOISE
         noise = (torch.rand(y.shape)*2-1)\
                 .to(y.device)\
-                .reshape(-1, preprocess.block_size)
+                .reshape(-1, preprocess.block_size)/100
         S_noise = torch.rfft(noise,1).reshape(bs,-1,preprocess.block_size//2+1,2)
 
         # FORMATTING FILTER_COEF TO COMPLEX FORM

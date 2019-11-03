@@ -18,7 +18,7 @@ class preprocess:
 
     # Must match the number displayed when preprocessing:
     # "Splitting data into XXXXX examples..."
-    num_batch      = 898
+    num_batch      = 896
 
     # Smoothed loudness kernel size
     kernel_size    = 8
@@ -40,4 +40,4 @@ class ddsp:
     filter_size    = 64
 
     # Number of step with add synth alone
-    warmup         = 2000
+    warmup         = 5000
