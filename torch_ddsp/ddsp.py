@@ -27,9 +27,16 @@ class Reverb(nn.Module):
         self.impulse[:,0]  = 0
         self.identity[:,0] = 1
 
-    def forward(self, x):
-        wetdry = x[:,0].unsqueeze(-1)
-        decay  = x[:,1].unsqueeze(-1)
+        self.wetdry = nn.Parameter(torch.Tensor([2]), requires_grad=False)
+        self.decay  = nn.Parameter(torch.Tensor([4]), requires_grad=False)
+
+    def forward(self, x, conv_pass):
+        if conv_pass:
+            wetdry = x[:,0].unsqueeze(-1)
+            decay  = x[:,1].unsqueeze(-1)
+        else:
+            wetdry = self.wetdry
+            decay  = self.decay
 
         idx = torch.sigmoid(wetdry) * self.identity
         imp = torch.sigmoid(1 - wetdry) * self.impulse
@@ -225,7 +232,7 @@ class NeuralSynth(nn.Module):
 
 
 
-    def forward(self, x, f0, lo, noise_pass=False, conv_pass=False):
+    def forward(self, x, f0, lo, synth_pass=True, noise_pass=False, conv_pass=False):
         bs = f0.shape[0]
         assert len(f0.shape)==3, f"f0 input must be 3-dimensional, but is {len(f0.shape)}-dimensional."
         assert len(lo.shape)==3, f"lo input must be 3-dimensional, but is {len(lo.shape)}-dimensional."
@@ -256,6 +263,9 @@ class NeuralSynth(nn.Module):
         antia_alias = (self.k * f0.unsqueeze(-1) < .5).float()
 
         y =  amp * torch.sum(antia_alias * alpha * torch.sin( self.k * phi),-1)
+
+        if not synth_pass:
+            y = y.detach()
 
         # NOISE SHAPING ########################################################
 
@@ -299,7 +309,7 @@ class NeuralSynth(nn.Module):
 
         Y_S = torch.rfft(y,1)
 
-        impulse = self.impulse(reverb)
+        impulse = self.impulse(reverb, conv_pass)
 
         impulse = nn.functional.pad(impulse,
                                     (0, preprocess.block_size*preprocess.sequence_size),

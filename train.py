@@ -9,9 +9,29 @@ import os
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
+
+# ==========[------]======[------]==========
+
+def learning_scheme(step):
+    synth_pass = True
+    noise_pass = True if step > hparams.train.warmup_noise else False
+    conv_pass  = True if step > hparams.train.warmup_conv  else False
+
+    if (step > hparams.train.warmup_noise) and\
+    (step <= hparams.train.warmup_noise + hparams.train.warmup_synth):
+        synth_pass = False
+
+    elif (step > hparams.train.warmup_conv) and\
+    (step <= hparams.train.warmup_conv + hparams.train.warmup_synth):
+        synth_pass = False
+
+    return synth_pass, noise_pass, conv_pass
+
+
+
+
 def train_step(model, opt_list, step, data_list):
-    noise_pass = True if step > hparams.ddsp.warmup else False
-    conv_pass  = True #if step > hparams.ddsp.warmup else False
+    synth_pass, noise_pass, conv_pass = learning_scheme(step)
 
     opt_list[0].zero_grad()
 
@@ -24,6 +44,7 @@ def train_step(model, opt_list, step, data_list):
     z, output, amp, alpha, S_noise = model(raw_audio.unsqueeze(1),
                                            f0.unsqueeze(-1),
                                            lo.unsqueeze(-1),
+                                           synth_pass,
                                            noise_pass,
                                            conv_pass)
 

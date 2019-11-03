@@ -40,4 +40,9 @@ class ddsp:
     filter_size    = 64
 
     # Number of step with add synth alone
-    warmup         = 5000
+
+class train:
+    # Train warmups
+    warmup_synth   = 500
+    warmup_conv    = 3000
+    warmup_noise   = 5000
