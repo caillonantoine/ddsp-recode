@@ -269,8 +269,7 @@ class NeuralSynth(nn.Module):
         # FILTERING OUT FREQUENCIES ABOVE NYQUIST
         antia_alias = (self.k * f0.unsqueeze(-1) < .5).float()
 
-        # y =  amp * torch.sum(antia_alias * alpha * torch.sin( self.k * phi),-1)
-        y =  amp * torch.sum(alpha * torch.sin( self.k * phi),-1)
+        y =  amp * torch.sum(antia_alias * alpha * torch.sin( self.k * phi),-1)
 
         if not synth_pass:
             y = y.detach()
