@@ -11,8 +11,14 @@ from tqdm import tqdm
 
 
 # ==========[------]======[------]==========
+#           |      |      |      | warmup_noise + warmup_synth
+#           |      |      | warmup_noise
+#           |      | warmup_conv + warmup_synth
+#           | warmup_conv
+
 
 def learning_scheme(step):
+    amp_pass   = True if step > hparams.train.warmup_amp else False
     synth_pass = True
     noise_pass = True if step > hparams.train.warmup_noise else False
     conv_pass  = True if step > hparams.train.warmup_conv  else False
@@ -25,13 +31,13 @@ def learning_scheme(step):
     (step <= hparams.train.warmup_conv + hparams.train.warmup_synth):
         synth_pass = False
 
-    return synth_pass, noise_pass, conv_pass
+    return amp_pass, synth_pass, noise_pass, conv_pass
 
 
 
 
 def train_step(model, opt_list, step, data_list):
-    synth_pass, noise_pass, conv_pass = learning_scheme(step)
+    amp_pass, synth_pass, noise_pass, conv_pass = learning_scheme(step)
 
     opt_list[0].zero_grad()
 
@@ -44,6 +50,7 @@ def train_step(model, opt_list, step, data_list):
     z, output, amp, alpha, S_noise = model(raw_audio.unsqueeze(1),
                                            f0.unsqueeze(-1),
                                            lo.unsqueeze(-1),
+                                           amp_pass,
                                            synth_pass,
                                            noise_pass,
                                            conv_pass)

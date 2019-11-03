@@ -232,7 +232,11 @@ class NeuralSynth(nn.Module):
 
 
 
-    def forward(self, x, f0, lo, synth_pass=True, noise_pass=False, conv_pass=False):
+    def forward(self, x, f0, lo,
+                amp_pass=True,
+                synth_pass=True,
+                noise_pass=False,
+                conv_pass=False):
         bs = f0.shape[0]
         assert len(f0.shape)==3, f"f0 input must be 3-dimensional, but is {len(f0.shape)}-dimensional."
         assert len(lo.shape)==3, f"lo input must be 3-dimensional, but is {len(lo.shape)}-dimensional."
@@ -243,6 +247,9 @@ class NeuralSynth(nn.Module):
         # ADDITIVE SYNTH #######################################################
         # GETTING SYNTH PARAMETERS
         amp, alpha, filter_coef, h, reverb = self.decoder(z, f0, lo)
+
+        if not amp_pass:
+            amp = torch.ones_like(amp, requires_grad=False)
 
         reverb = torch.mean(reverb, 1)
 
@@ -262,7 +269,8 @@ class NeuralSynth(nn.Module):
         # FILTERING OUT FREQUENCIES ABOVE NYQUIST
         antia_alias = (self.k * f0.unsqueeze(-1) < .5).float()
 
-        y =  amp * torch.sum(antia_alias * alpha * torch.sin( self.k * phi),-1)
+        # y =  amp * torch.sum(antia_alias * alpha * torch.sin( self.k * phi),-1)
+        y =  amp * torch.sum(alpha * torch.sin( self.k * phi),-1)
 
         if not synth_pass:
             y = y.detach()

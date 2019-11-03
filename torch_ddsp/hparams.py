@@ -31,7 +31,7 @@ class ddsp:
     conv_kernel_size = 15
 
     # Number of partials involved in the harmonic signal
-    n_partial      = 100
+    n_partial      = 50
 
     # Size of GRU hidden state
     hidden_size    = 512
@@ -39,10 +39,9 @@ class ddsp:
     # Noise shaping filter size
     filter_size    = 64
 
-    # Number of step with add synth alone
-
 class train:
     # Train warmups
+    warmup_amp     = 1000
     warmup_synth   = 500
-    warmup_conv    = 3000
-    warmup_noise   = 5000
+    warmup_conv    = 5000
+    warmup_noise   = 8000
