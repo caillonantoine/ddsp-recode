@@ -63,6 +63,7 @@ def train_step(model, opt_list, step, data_list):
     z_mean,z_var = z
     reg_loss = torch.mean(torch.exp(z_var)**2 + z_mean**2 - z_var - 1)
 
+    collapse_loss = torch.mean(-torch.log(amp + 1e-10))
 
     loss = lin_loss + log_loss + .1 * reg_loss
 

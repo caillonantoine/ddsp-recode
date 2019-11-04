@@ -34,7 +34,7 @@ def getFundamentalFrequency(x):
                  f0_floor=50,
                  f0_ceil=2000)[0]
     elif preprocess.f0_estimation == "crepe":
-        f0 = crepe.predict(x, sr, step_size=hop)[1]
+        f0 = crepe.predict(x, sr, step_size=hop, verbose=False)[1]
 
     return f0[:preprocess.sequence_size].astype(np.float)
 
