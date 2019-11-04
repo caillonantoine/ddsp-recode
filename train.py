@@ -65,7 +65,11 @@ def train_step(model, opt_list, step, data_list):
 
     collapse_loss = torch.mean(-torch.log(amp + 1e-10))
 
-    loss = lin_loss + log_loss + .1 * reg_loss + .1* collapse_loss
+    loss = lin_loss + log_loss + .1 * reg_loss
+
+    # Used to avoid a silence collapse during early stage of training
+    if step < 1000:
+        loss += .1 * collapse_loss
 
     loss.backward()
     opt_list[0].step()
