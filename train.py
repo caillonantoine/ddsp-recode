@@ -65,7 +65,7 @@ def train_step(model, opt_list, step, data_list):
 
     collapse_loss = torch.mean(-torch.log(amp + 1e-10))
 
-    loss = lin_loss + log_loss + .1 * reg_loss
+    loss = lin_loss + log_loss + .1 * reg_loss + .1* collapse_loss
 
     loss.backward()
     opt_list[0].step()
@@ -128,7 +128,8 @@ def train_step(model, opt_list, step, data_list):
 
     return {"lin_loss":lin_loss.item(),
             "log_loss":log_loss.item(),
-            "kl_loss":reg_loss.item()}
+            "kl_loss":reg_loss.item(),
+            "collapse_loss":collapse_loss.item()}
 
 trainer = ct.Trainer(**ct.args.__dict__)
 
