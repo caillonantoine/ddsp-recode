@@ -42,6 +42,6 @@ class ddsp:
 class train:
     # Train warmups
     warmup_amp     = -1
-    warmup_synth   = 500
-    warmup_conv    = 5000
-    warmup_noise   = 8000
+    warmup_synth   = 200
+    warmup_conv    = 500
+    warmup_noise   = 2000
