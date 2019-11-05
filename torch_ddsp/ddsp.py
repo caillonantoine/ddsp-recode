@@ -169,9 +169,6 @@ class Decoder(nn.Module):
     def forward(self, z, f0, lo, hx=None):
         f0 = self.f0_MLP(f0)
         lo = self.lo_MLP(lo)
-
-        z_mean, z_var = z
-        z = torch.exp(z_var) * torch.randn_like(z_mean) + z_mean
         z  = self.z_MLP(z)
 
 
@@ -236,13 +233,18 @@ class NeuralSynth(nn.Module):
                 amp_pass=True,
                 synth_pass=True,
                 noise_pass=False,
-                conv_pass=False):
+                conv_pass=False,
+                pre_encoded=False):
         bs = f0.shape[0]
         assert len(f0.shape)==3, f"f0 input must be 3-dimensional, but is {len(f0.shape)}-dimensional."
         assert len(lo.shape)==3, f"lo input must be 3-dimensional, but is {len(lo.shape)}-dimensional."
 
         # Z ENCODING OF AUDIO ##################################################
-        z = self.encoder(x)
+        if pre_encoded:
+            z = x
+        else:
+            z_mean, z_var = self.encoder(x)
+            z = torch.exp(z_var) * torch.randn_like(z_mean) + z_mean
 
         # ADDITIVE SYNTH #######################################################
         # GETTING SYNTH PARAMETERS
