@@ -40,13 +40,12 @@ def getFundamentalFrequency(x):
 
 class BatchSoundFiles:
     def __init__(self, wav_list):
-        self.wavs = [li.load(wav, preprocess.samplerate)[0] for wav in wav_list]
+        self.wavs = wav_list
+    def read(self):
         mod = preprocess.block_size * preprocess.sequence_size
-        for wav in self.wavs:
-            wav = wav[:mod*(len(wav)//mod)].reshape(-1,mod)
-
-    def read(self, N):
         for head,wav in enumerate(self.wavs):
+            wav = li.load(wav, preprocess.samplerate)[0]
+            wav = wav[:mod*(len(wav)//mod)].reshape(-1,mod)
             for i in range(wav.shape[0]):
                 yield wav[i]
 
