@@ -40,16 +40,15 @@ def getFundamentalFrequency(x):
 
 class BatchSoundFiles:
     def __init__(self, wav_list):
-        self.wavs = [sf.SoundFile(file) for file in wav_list]
-        self.file_head = 0
+        self.wavs = [li.load(wav, preprocess.samplerate)[0] for wav in wav_list]
+        mod = preprocess.block_size * preprocess.sequence_size
+        for wav in self.wavs:
+            wav = wav[:mod*(len(wav)//mod)].reshape(-1,mod)
 
     def read(self, N):
-        x = self.wavs[self.file_head].read(N)
-        if len(x) != N:
-            self.file_head += 1
-            x = self.wavs[self.file_head].read(N)
-
-        return self.file_head, x
+        for head,wav in enumerate(self.wavs):
+            for i in range(wav.shape[0]):
+                yield wav[i]
 
     def __len__(self):
         mod = preprocess.block_size * preprocess.sequence_size
@@ -81,8 +80,7 @@ def process(filename, block_size, sequence_size):
     in_point  = 0
     last_file = 0
 
-    for b in tqdm(range(batch)):
-        file_index, x = sound.read(block_size * sequence_size)
+    for file_index, x in sound.read():
         index[b] = file_index
 
         for i,msstft in enumerate(multiScaleFFT(torch.from_numpy(x).float(), amp=amp)):

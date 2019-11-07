@@ -18,7 +18,7 @@ class preprocess:
 
     # Must match the number displayed when preprocessing:
     # "Splitting data into XXXXX examples..."
-    num_batch      = 896
+    num_batch      = 600
 
     # Smoothed loudness kernel size
     kernel_size    = 8
