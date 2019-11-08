@@ -61,7 +61,7 @@ def train_step(model, opt_list, step, data_list):
     log_loss = sum([torch.mean(abs(torch.log(stfts[i]+1e-4) - torch.log(stfts_rec[i] + 1e-4))) for i in range(len(stfts_rec))])
 
     z_mean,z_var = z
-    reg_loss = torch.mean(torch.exp(z_var)**2 + z_mean**2 - z_var - 1)
+    reg_loss = -.5 * z_var + .5 * (torch.exp(z_var) + z_mean * z_mean) - .5
 
     collapse_loss = torch.mean(-torch.log(amp + 1e-10))
 
