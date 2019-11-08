@@ -1,5 +1,5 @@
 class preprocess:
-    input_filename = "data/*.wav" # must be a mono, 16000Hz .wav file
+    input_filename = "/fast-2/datasets/Solv4_strings_wav/audio/Violin/**/*.wav" # must be a mono, 16000Hz .wav file
     samplerate     = 16000 # Used when synth back audio
     output_dir     = "output"
 
@@ -18,7 +18,7 @@ class preprocess:
 
     # Must match the number displayed when preprocessing:
     # "Splitting data into XXXXX examples..."
-    num_batch      = 600
+    num_batch      = 7767
 
     # Smoothed loudness kernel size
     kernel_size    = 8

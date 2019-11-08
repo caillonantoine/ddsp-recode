@@ -7,7 +7,7 @@ from torch_ddsp.hparams import preprocess
 from torch_ddsp.ddsp import NeuralSynth
 import torch
 from glob import glob
-from pyworld import dio
+#from pyworld import dio
 import crepe
 
 multiScaleFFT = NeuralSynth().multiScaleFFT
@@ -41,17 +41,23 @@ def getFundamentalFrequency(x):
 class BatchSoundFiles:
     def __init__(self, wav_list):
         self.wavs = wav_list
+    
     def read(self):
         mod = preprocess.block_size * preprocess.sequence_size
         for head,wav in enumerate(self.wavs):
             wav = li.load(wav, preprocess.samplerate)[0]
             wav = wav[:mod*(len(wav)//mod)].reshape(-1,mod)
             for i in range(wav.shape[0]):
-                yield wav[i]
+                yield head,wav[i]
 
     def __len__(self):
         mod = preprocess.block_size * preprocess.sequence_size
-        return sum([mod*(len(wav)//mod) for wav in self.wavs])
+        batch = 0
+        for wav in self.wavs:
+            temp = sf.SoundFile(wav)
+            N = (len(temp) * preprocess.samplerate) // temp.samplerate
+            batch += N//mod
+        return batch
 
 
 def process(filename, block_size, sequence_size):
@@ -59,9 +65,9 @@ def process(filename, block_size, sequence_size):
     os.makedirs(output, exist_ok=True)
 
     sound = BatchSoundFiles(glob(filename))
-    batch = len(sound) // (block_size * sequence_size)
+    batch = len(sound)
     print(f"Splitting data into {batch} examples of {sequence_size}-deep sequences of {block_size} samples.")
-
+    exit()
 
     scales = preprocess.fft_scales
     sp = []
@@ -78,8 +84,7 @@ def process(filename, block_size, sequence_size):
 
     in_point  = 0
     last_file = 0
-
-    for file_index, x in sound.read():
+    for b, (file_index, x) in enumerate(tqdm(sound.read())):
         index[b] = file_index
 
         for i,msstft in enumerate(multiScaleFFT(torch.from_numpy(x).float(), amp=amp)):
