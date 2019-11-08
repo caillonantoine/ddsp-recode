@@ -341,7 +341,7 @@ class NeuralSynth(nn.Module):
 
         y = y[:,:-preprocess.block_size*preprocess.sequence_size]
 
-        return z, y, amp, alpha, S_filtered_noise.reshape(bs,
+        return [z_mean, z_var], y, amp, alpha, S_filtered_noise.reshape(bs,
                                                        -1,
                                                        preprocess.block_size//2+1, 2)
 
