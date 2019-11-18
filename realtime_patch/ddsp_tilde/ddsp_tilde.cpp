@@ -1,10 +1,12 @@
-/// @file
-///	@ingroup 	minexamples
-///	@copyright	Copyright 2018 The Min-DevKit Authors. All rights reserved.
-///	@license	Use of this source code is governed by the MIT License found in the License.md file.
-
-#pragma once
+#include "ddsp_core.hpp"
 #include "c74_min.h"
+#include <math.h>
+#include <algorithm>
+
+#define PI             3.14159265359
+#define PARTIAL_NUMBER 100
+#define FILTER_SIZE    81
+#define SAMPLERATE     16000
 
 using namespace c74::min;
 
@@ -14,17 +16,42 @@ public:
  									 "MAX / MSP with libtorch."};
 	MIN_TAGS		{ "synthesis" };
 	MIN_AUTHOR		{ "Antoine CAILLON" };
-	// MIN_RELATED		{ "min.edge~, min.edgelow~, edge~, snapshot~, ==~" };
 
 	inlet<>  f0_input	{ this, "Fudamental frequency (f0)" };
 	inlet<>  lo_input	{ this, "Loudness (lo)" };
-	outlet<> output	{ this, "Output of DDSP" };
+	outlet<> output	{ this, "Output of DDSP", "signal" };
+
+	// ddsp_tilde(){
+		// model = new DDSPCore();
+	// }
 
 	sample operator()(sample f0, sample lo) {
-		return f0;
+
+		float output(0);
+
+		// if (head++ % 160 == 0) {
+			// model->getNextOutput(float(f0), float(lo), parameters);
+			// head = 0;
+		// }
+
+		// SYNTH
+		for (int i(0); i<30; i++) {
+			output += cos ( i * i_phase );
+		}
+
+		// UPDATE INSTANTANEOUS PHASE
+		i_phase += 2 * PI * float(f0) / SAMPLERATE;
+		while (i_phase > 2 * PI) { i_phase -= 2 * PI;}
+
+
+		return output;
 	}
 
 private:
+	float i_phase;
+	int head;
+	// float parameters[PARTIAL_NUMBER + FILTER_SIZE + 1];
+	// DDSPCore *model;
 
 };
 
