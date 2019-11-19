@@ -16,6 +16,7 @@ DDSPCore::DDSPCore() {
 }
 
 void DDSPCore::getNextOutput(float f0, float lo, float * result){
+  torch::NoGradGuard no_grad;
   m_f0[0][0][0] = f0;
   m_lo[0][0][0] = lo;
 
