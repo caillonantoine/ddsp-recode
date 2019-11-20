@@ -1,13 +1,15 @@
 #include "ddsp_core.hpp"
+#include "m_pd.h"
 
 DDSPCore::DDSPCore() {
   try {
     m_module = torch::jit::load("ddsp.torchscript");
+    post("Model successfully loaded!");
   }
   catch (const c10::Error& e) {
-    std::cerr << "error loading the model\n";
+    post("error loading the model");
   }
-  std::cout << "Model successfully loaded!\n";
+  
 
   m_f0 = torch::zeros({1,1,1});
   m_lo = torch::zeros({1,1,1});

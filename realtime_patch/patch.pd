@@ -1,4 +1,4 @@
-#N canvas 732 173 1440 726 10;
+#N canvas 369 193 615 517 10;
 #N canvas 428 649 361 337 ddsp 0;
 #X obj 201 41 loadbang;
 #X obj 201 63 t b b;
@@ -53,7 +53,6 @@
 #X msg 451 369 open rec.wav;
 #X msg 553 361 stop;
 #X msg 526 394 start;
-#X obj 73 385 print;
 #X msg 67 250 roomsize 0.9;
 #X connect 0 0 11 0;
 #X connect 2 0 3 0;
@@ -65,7 +64,6 @@
 #X connect 7 1 8 1;
 #X connect 8 0 9 0;
 #X connect 9 0 4 0;
-#X connect 9 0 33 0;
 #X connect 10 0 0 0;
 #X connect 11 0 1 0;
 #X connect 11 0 29 0;
@@ -86,7 +84,7 @@
 #X connect 20 0 22 0;
 #X connect 21 0 17 0;
 #X connect 22 0 5 0;
-#X connect 23 0 34 0;
+#X connect 23 0 33 0;
 #X connect 24 0 25 0;
 #X connect 25 0 27 1;
 #X connect 26 0 27 0;
@@ -95,4 +93,4 @@
 #X connect 30 0 29 0;
 #X connect 31 0 29 0;
 #X connect 32 0 29 0;
-#X connect 34 0 11 0;
+#X connect 33 0 11 0;

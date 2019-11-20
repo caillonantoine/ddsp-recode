@@ -10,3 +10,4 @@ temp/
 notebooks/
 !showcase/*.wav
 */build/
+.vscode
