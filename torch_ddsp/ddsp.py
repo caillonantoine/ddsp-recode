@@ -242,6 +242,8 @@ class NeuralSynth(nn.Module):
         # Z ENCODING OF AUDIO ##################################################
         if pre_encoded:
             z = x
+            z_mean = None
+            z_var = None
         else:
             z_mean, z_var = self.encoder(x)
             z = torch.exp(z_var) * torch.randn_like(z_mean) + z_mean
