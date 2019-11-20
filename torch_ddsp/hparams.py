@@ -4,7 +4,7 @@ class preprocess:
     output_dir     = "output"
 
     # F0 ESTIMATION ALGORITHM (dio or crepe) ###################################
-    f0_estimation = "crepe"
+    f0_estimation = "dio"
 
 
     # Multi scale stft objective
