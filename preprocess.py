@@ -3,12 +3,12 @@ import soundfile as sf
 import librosa as li
 from tqdm import tqdm
 import os
-from torch_ddsp.hparams import preprocess
-from torch_ddsp.ddsp import NeuralSynth
+from .torch_ddsp.hparams import preprocess
+from .torch_ddsp.ddsp import NeuralSynth
 import torch
 from glob import glob
-#from pyworld import dio
-import crepe
+from pyworld import dio
+# import crepe
 
 multiScaleFFT = NeuralSynth().multiScaleFFT
 amp = lambda x: x[:,:,0]**2 + x[:,:,1]**2
@@ -41,7 +41,7 @@ def getFundamentalFrequency(x):
 class BatchSoundFiles:
     def __init__(self, wav_list):
         self.wavs = wav_list
-    
+
     def read(self):
         mod = preprocess.block_size * preprocess.sequence_size
         for head,wav in enumerate(self.wavs):
