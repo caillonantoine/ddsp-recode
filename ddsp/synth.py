@@ -102,7 +102,7 @@ class Noise(Synth):
 
         noise = torch.view_as_real(noise)
         noise = torch.irfft(noise, 1, normalized=True)[..., :-1]
-        noise = noise.reshape(noise.shape[0], -1)
+        noise = noise.reshape(noise.shape[0], 1, -1)
 
         return noise
 

@@ -1,8 +1,18 @@
 # DDSP CONFIGURATION FILE
+training:
+  batch: 16
+  name: "debug"
+  root: "runs"
+  lr: .0001
+  epochs: 1000
+  scales: [2048, 1024, 512, 256, 128, 64]
 
 data:
   sampling_rate: &sr 24000
   block_size: &block_size 256
+  signal_size: 32768
+  preprocessed: "./preprocessed"
+  wav_loc: "../toy/"
 
 recurrent_args:
   n_inputs: 2
