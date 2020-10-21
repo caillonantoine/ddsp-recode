@@ -51,12 +51,12 @@ class Harmonic(Synth):
         with torch.no_grad():
             f0 = self.upsample(f0)
 
-        harmonic_index = torch.arange(1, self.n_harmonic + 1).reshape(1, -1, 1)
+        h_index = torch.arange(1, self.n_harmonic + 1).reshape(1, -1, 1).to(x)
         phase = 2 * math.pi * torch.cumsum(f0, -1) / self.sampling_rate
         phase = phase % (2 * math.pi)
-        phase = phase * harmonic_index
+        phase = phase * h_index
 
-        f0s = f0 * harmonic_index
+        f0s = f0 * h_index
         antialiasing = f0s < self.sampling_rate / 2
 
         x = (torch.cos(phase) * antialiasing * alphas).sum(1, keepdim=True)
@@ -96,7 +96,7 @@ class Noise(Synth):
 
         noise = torch.rand(x.shape[0], x.shape[1], self.upsample_factor)
         noise = torch.rfft(noise, 1, normalized=True)
-        noise = torch.view_as_complex(noise)
+        noise = torch.view_as_complex(noise).to(x)
 
         noise = x * noise
 
