@@ -1,0 +1,13 @@
+# DDSP CONFIGURATION FILE
+
+recurrent_args:
+  n_inputs: 3
+  hidden_size: &feature_out 512
+  n_outputs: 3
+  n_layers: 3
+
+harmonic_args:
+  feature_out: *feature_out
+  n_harmonic: 101
+  upsample_factor: 256
+  sampling_rate: 24000
