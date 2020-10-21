@@ -13,10 +13,10 @@ class DDSP(nn.Module):
         self.noise = Noise(**noise_args)
         self.reverb = Reverb()
 
-    def forward(self, x, pitch, loudness):
-        hidden = self.recurrent_block([x, pitch, loudness])
+    def forward(self, pitch, loudness):
+        hidden = self.recurrent_block([pitch, loudness])
 
-        y = self.harmonic(hidden) + self.noise(hidden)
+        y = self.harmonic(hidden, pitch) + self.noise(hidden)
         y = self.reverb(y)
 
         return y

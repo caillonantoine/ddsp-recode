@@ -24,13 +24,7 @@ class MLP(nn.Module):
 
 
 class RecurrentBlock(nn.Module):
-    def __init__(
-        self,
-        n_inputs,
-        hidden_size,
-        n_outputs,
-        n_layers,
-    ):
+    def __init__(self, n_inputs, hidden_size, n_outputs, n_layers):
         super().__init__()
         self.n_inputs = n_inputs
         self.hidden_size = hidden_size
