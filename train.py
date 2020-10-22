@@ -1,15 +1,20 @@
+from os import path
+from types import SimpleNamespace
+
+import torch
 import numpy as np
-import crepe
-from udls import SimpleDataset
 import librosa as li
 import yaml
-from types import SimpleNamespace
-import torch
-from os import path
 from tqdm import tqdm
-from torch.utils.tensorboard import SummaryWriter
-from ddsp.model import DDSP
 import matplotlib.pyplot as plt
+
+import crepe
+from udls import SimpleDataset
+from torch.utils.tensorboard import SummaryWriter
+
+from ddsp.model import DDSP
+from ddsp.synth import Harmonic, Noise
+from ddsp.viz import VizHook
 
 with open("ddsp_config.yaml", "r") as config:
     config = yaml.safe_load(config)
@@ -87,8 +92,24 @@ model = DDSP(
 ).to(device)
 opt = torch.optim.Adam(model.parameters(), config["training"]["lr"])
 
+vizhook = VizHook(writer)
+
+for m in model.modules():
+    if isinstance(m, Harmonic):
+        m.register_forward_hook(vizhook)
+    elif isinstance(m, Noise):
+        m.register_forward_hook(vizhook)
+
+step = 0
 for e in range(config["training"]["epochs"]):
     for x, f0, loudness in tqdm(trainloader):
+        vizhook.set_step(step)
+
+        if not step % 100:
+            vizhook.enable_hook()
+        else:
+            vizhook.disable_hook()
+
         x = x.to(device)
         f0 = f0.unsqueeze(-1).to(device)
         loudness = loudness.unsqueeze(-1).to(device)
@@ -103,3 +124,30 @@ for e in range(config["training"]["epochs"]):
         loss = sum([(sx - sy).abs().mean() for sx, sy in zip(Sx, Sy)])
         loss.backward()
         opt.step()
+
+        if not step % 100:
+            Sx = np.log(Sx[0][0].cpu().detach().numpy() + 1e-3)
+            Sy = np.log(Sy[0][0].cpu().detach().numpy() + 1e-3)
+
+            plt.subplot(121)
+            plt.imshow(Sx)
+            plt.subplot(122)
+            plt.imshow(Sy)
+            plt.tight_layout()
+
+            writer.add_figure("reconstruction", plt.gcf(), step)
+
+            writer.add_audio(
+                "original",
+                x.reshape(-1),
+                step,
+                model.harmonic.sampling_rate,
+            )
+            writer.add_audio(
+                "synthesized",
+                y.reshape(-1),
+                step,
+                model.harmonic.sampling_rate,
+            )
+
+        step += 1

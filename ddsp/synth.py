@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import math
+from .complex_utils import complex_abs, complex_product
 
 
 def mod_sigmoid(x):
@@ -92,15 +93,16 @@ class Noise(Synth):
     def forward(self, x):
         x = mod_sigmoid(self.proj_noise(x))
         x = self.window_filters(x)
-        x = torch.view_as_complex(x)
+        # x = torch.view_as_complex(x)
 
         noise = torch.rand(x.shape[0], x.shape[1], self.upsample_factor)
-        noise = torch.rfft(noise, 1, normalized=True)
-        noise = torch.view_as_complex(noise).to(x)
+        noise = 2 * noise - 1
+        noise = torch.rfft(noise, 1, normalized=True).to(x)
+        # noise = torch.view_as_complex(noise).to(x)
 
-        noise = x * noise
+        noise = complex_product(x, noise)
 
-        noise = torch.view_as_real(noise)
+        # noise = torch.view_as_real(noisse)
         noise = torch.irfft(noise, 1, normalized=True)[..., :-1]
         noise = noise.reshape(noise.shape[0], 1, -1)
 
@@ -115,27 +117,17 @@ class Reverb(Synth):
 
     def forward(self, x):
         t = torch.arange(x.shape[-1]).to(x)
-        wet = torch.rand(*x.shape).to(x)
+        wet = (2 * torch.rand_like(x) - 1)
         wet = torch.exp(-torch.exp(self.decay) * t) * wet
 
         dry = torch.zeros_like(x)
         dry[..., 0] = 1
 
         impulse = wet * self.wet + dry * (1 - self.wet)
+        impulse = torch.rfft(impulse, 1, normalized=True)
 
-        impulse = torch.view_as_complex(
-            torch.rfft(
-                impulse,
-                1,
-                normalized=True,
-            ))
-        x = torch.view_as_complex(torch.rfft(
-            x,
-            1,
-            normalized=True,
-        ))
-
-        x = torch.view_as_real(impulse * x)
+        x = torch.rfft(x, 1, normalized=True)
+        x = complex_product(impulse, x)
         x = torch.irfft(x, 1, normalized=True)[..., :t.shape[-1]]
 
         return x

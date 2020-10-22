@@ -3,6 +3,7 @@ import torch.nn as nn
 
 from .base_layers import RecurrentBlock
 from .synth import Harmonic, Noise, Reverb
+from .complex_utils import complex_abs
 
 
 class DDSP(nn.Module):
@@ -33,5 +34,5 @@ class DDSP(nn.Module):
                 hop_length=int((.25) * scale),
                 center=False,
             )
-            stfts.append(torch.view_as_complex(S).abs())
+            stfts.append(complex_abs(S))
         return stfts

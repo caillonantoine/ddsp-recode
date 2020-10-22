@@ -1,6 +1,6 @@
 # DDSP CONFIGURATION FILE
 training:
-  batch: 16
+  batch: 1
   name: "debug"
   root: "runs"
   lr: .0001
