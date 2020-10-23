@@ -81,7 +81,7 @@ class Noise(Synth):
         self.register_buffer("window", window)
 
     def window_filters(self, x):
-        x = x.unsqueeze(-1).expand(*x.shape, 2)
+        x = x.unsqueeze(-1).expand(*x.shape, 2).contiguous()
         x[..., 1] = 0
         x = torch.irfft(x, 1, normalized=True)
         x = torch.roll(x, self.n_band)

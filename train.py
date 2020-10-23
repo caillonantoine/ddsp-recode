@@ -16,6 +16,8 @@ from ddsp.model import DDSP
 from ddsp.synth import Harmonic, Noise
 from ddsp.viz import VizHook
 
+import soundfile as sf
+
 with open("ddsp_config.yaml", "r") as config:
     config = yaml.safe_load(config)
 
@@ -105,7 +107,7 @@ for e in range(config["training"]["epochs"]):
     for x, f0, loudness in tqdm(trainloader):
         vizhook.set_step(step)
 
-        if not step % 100:
+        if not step % 1000:
             vizhook.enable_hook()
         else:
             vizhook.disable_hook()
@@ -113,6 +115,7 @@ for e in range(config["training"]["epochs"]):
         x = x.to(device)
         f0 = f0.unsqueeze(-1).to(device)
         loudness = loudness.unsqueeze(-1).to(device)
+        loudness = (loudness - mean_loudness) / std_loudness
 
         y = model(f0, loudness).squeeze(1)
 
@@ -130,24 +133,21 @@ for e in range(config["training"]["epochs"]):
             Sy = np.log(Sy[0][0].cpu().detach().numpy() + 1e-3)
 
             plt.subplot(121)
-            plt.imshow(Sx)
+            plt.imshow(Sx, aspect="auto", origin="lower")
             plt.subplot(122)
-            plt.imshow(Sy)
+            plt.imshow(Sy, aspect="auto", origin="lower")
             plt.tight_layout()
 
             writer.add_figure("reconstruction", plt.gcf(), step)
 
-            writer.add_audio(
-                "original",
-                x.reshape(-1),
-                step,
-                model.harmonic.sampling_rate,
-            )
-            writer.add_audio(
-                "synthesized",
-                y.reshape(-1),
-                step,
+            audio = torch.cat([x, y], -1).reshape(-1)
+            sf.write(
+                path.join(root, f"audio_{step:06d}.wav"),
+                audio.cpu().detach().numpy(),
                 model.harmonic.sampling_rate,
             )
 
+            torch.save(model.state_dict(), path.join(root, "state.pth"))
+
+        writer.add_scalar("loss", loss.item(), step)
         step += 1

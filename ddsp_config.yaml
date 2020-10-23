@@ -1,7 +1,7 @@
 # DDSP CONFIGURATION FILE
 training:
-  batch: 1
-  name: "debug"
+  batch: 16
+  name: "test_violin"
   root: "runs"
   lr: .0001
   epochs: 1000
@@ -11,8 +11,8 @@ data:
   sampling_rate: &sr 24000
   block_size: &block_size 256
   signal_size: 32768
-  preprocessed: "./preprocessed"
-  wav_loc: "../toy/"
+  preprocessed: "/fast-1/tmp/ddsp_violin/"
+  wav_loc: "/fast-2/datasets/Solv4_strings_wav/audio/Violin/"
 
 recurrent_args:
   n_inputs: 2
