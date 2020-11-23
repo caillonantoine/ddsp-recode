@@ -64,7 +64,7 @@ class Harmonic(Synth):
         amplitude = self.upsample(amplitude.transpose(1, 2))
 
         x = (torch.cos(phase) * antialiasing * alphas).sum(1, keepdim=True)
-        x = x * amplitude
+        # x = x * amplitude
 
         return x, {"amp": amplitude, "alphas": alphas}
 
@@ -117,7 +117,7 @@ class Reverb(Synth):
 
     def forward(self, x):
         noise = 2 * torch.rand_like(x) - 1
-        t = torch.arange(noise.shape[-1]) / self.sampling_rate
+        t = torch.arange(noise.shape[-1]).to(x.device) / self.sampling_rate
         ramp = torch.exp(-torch.exp(self.decay) * t)
         noise = noise * ramp
 

@@ -38,7 +38,7 @@ def preprocess(name):
     f0 = crepe.predict(x, sr, step_size=1000 * step_size)[1]
 
     loudness = li.feature.rms(x, hop_length=config["data"]["block_size"])
-    # loudness = np.log(loudness + 1e-5)
+    loudness = np.log(loudness + 1e-5)
 
     x = x.reshape(-1, N)
     crop = N // config["data"]["block_size"] * x.shape[0]
