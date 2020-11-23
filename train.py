@@ -38,7 +38,7 @@ def preprocess(name):
     f0 = crepe.predict(x, sr, step_size=1000 * step_size)[1]
 
     loudness = li.feature.rms(x, hop_length=config["data"]["block_size"])
-    loudness = np.log(loudness + 1e-5)
+    # loudness = np.log(loudness + 1e-5)
 
     x = x.reshape(-1, N)
     crop = N // config["data"]["block_size"] * x.shape[0]
@@ -56,7 +56,8 @@ trainloader = torch.utils.data.DataLoader(
     SimpleDataset(config["data"]["preprocessed"],
                   config["data"]["wav_loc"],
                   preprocess_function=preprocess,
-                  split_set="full"),
+                  split_set="full",
+                  extension="*.wav,*.mp3"),
     config["training"]["batch"],
     shuffle=True,
     drop_last=True,
@@ -94,51 +95,86 @@ model = DDSP(
 ).to(device)
 opt = torch.optim.Adam(model.parameters(), config["training"]["lr"])
 
-vizhook = VizHook(writer)
-
-for m in model.modules():
-    if isinstance(m, Harmonic):
-        m.register_forward_hook(vizhook)
-    elif isinstance(m, Noise):
-        m.register_forward_hook(vizhook)
-
 step = 0
 for e in range(config["training"]["epochs"]):
     for x, f0, loudness in tqdm(trainloader):
-        vizhook.set_step(step)
-
-        if not step % 1000:
-            vizhook.enable_hook()
-        else:
-            vizhook.disable_hook()
-
         x = x.to(device)
         f0 = f0.unsqueeze(-1).to(device)
         loudness = loudness.unsqueeze(-1).to(device)
         loudness = (loudness - mean_loudness) / std_loudness
 
-        y = model(f0, loudness).squeeze(1)
+        y, artifacts = model(f0, loudness)
+        y = y.squeeze(1)
 
         with torch.no_grad():
             Sx = model.multiScaleFFT(x)
 
         Sy = model.multiScaleFFT(y)
 
-        loss = sum([(sx - sy).abs().mean() for sx, sy in zip(Sx, Sy)])
+        loss_lin = sum([(sx - sy).abs().mean() for sx, sy in zip(Sx, Sy)])
+        loss_log = sum([
+            (torch.log(sx + 1e-4) - torch.log(sy + 1e-4)).abs().mean()
+            for sx, sy in zip(Sx, Sy)
+        ])
+
+        loss = loss_lin + loss_log  #- .1 * torch.log(artifacts["amp"].mean())
+
         loss.backward()
         opt.step()
 
         if not step % 100:
+            alpha_n = artifacts["alphas"].cpu().detach().numpy()
+            histogram = [
+                np.histogram(
+                    alpha_n[:, i, :].reshape(-1),
+                    bins=100,
+                    range=(0, 1),
+                )[0] for i in range(alpha_n.shape[1])
+            ]
+            histogram = np.asarray(histogram)
+            plt.imshow(np.log(histogram.T + 1e-3),
+                       origin="lower",
+                       aspect="auto",
+                       cmap="magma")
+            plt.colorbar()
+            plt.xlabel("Harmonic number")
+            plt.ylabel("Density")
+            plt.tight_layout()
+
+            writer.add_figure(
+                "harmonic_repartition",
+                plt.gcf(),
+                step,
+            )
+
+            plt.plot(artifacts["amp"][0].reshape(-1).cpu().detach().numpy())
+            plt.xlabel("Time step")
+            plt.ylabel("Amplitude")
+            plt.tight_layout()
+
+            writer.add_figure(
+                "amplitude",
+                plt.gcf(),
+                step,
+            )
+
             Sx = np.log(Sx[0][0].cpu().detach().numpy() + 1e-3)
             Sy = np.log(Sy[0][0].cpu().detach().numpy() + 1e-3)
 
             plt.subplot(121)
             plt.imshow(Sx, aspect="auto", origin="lower")
+            plt.colorbar()
+
             plt.subplot(122)
             plt.imshow(Sy, aspect="auto", origin="lower")
+            plt.colorbar()
+
             plt.tight_layout()
 
             writer.add_figure("reconstruction", plt.gcf(), step)
+
+            plt.plot(y[0].reshape(-1).cpu().detach().numpy())
+            writer.add_figure("synth_signal", plt.gcf(), step)
 
             audio = torch.cat([x, y], -1).reshape(-1)
             sf.write(

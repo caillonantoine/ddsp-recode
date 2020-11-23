@@ -44,6 +44,7 @@ class VizHook(object):
                    origin="lower",
                    aspect="auto",
                    cmap="magma")
+        plt.colorbar()
         plt.xlabel("Harmonic number")
         plt.ylabel("Density")
         plt.tight_layout()
@@ -72,6 +73,7 @@ class VizHook(object):
         noise_spec = np.log(noise_spec + 1e-3)
 
         plt.imshow(noise_spec)
+        plt.colorbar()
         plt.tight_layout()
 
         self.writer.add_figure("noise", plt.gcf(), self.step)

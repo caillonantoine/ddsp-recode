@@ -43,17 +43,11 @@ class Harmonic(Synth):
     def forward(self, x, f0):
         f0 = f0.reshape(f0.shape[0], 1, -1)
 
-        alphas = mod_sigmoid(self.proj_alphas(x))
-        alphas = alphas / alphas.sum(-1, keepdim=True)
-        alphas = self.upsample(alphas.transpose(1, 2))
-
-        amplitude = mod_sigmoid(self.proj_amplitude(x))
-        amplitude = self.upsample(amplitude.transpose(1, 2))
-
         with torch.no_grad():
             f0 = self.upsample(f0)
 
         h_index = torch.arange(1, self.n_harmonic + 1).reshape(1, -1, 1).to(x)
+
         phase = 2 * math.pi * torch.cumsum(f0, -1) / self.sampling_rate
         phase = phase % (2 * math.pi)
         phase = phase * h_index
@@ -61,10 +55,18 @@ class Harmonic(Synth):
         f0s = f0 * h_index
         antialiasing = f0s < self.sampling_rate / 2
 
+        alphas = mod_sigmoid(self.proj_alphas(x))
+        alphas = self.upsample(alphas.transpose(1, 2))
+        alphas = alphas * antialiasing
+        alphas = alphas / alphas.sum(1, keepdim=True)
+
+        amplitude = mod_sigmoid(self.proj_amplitude(x))
+        amplitude = self.upsample(amplitude.transpose(1, 2))
+
         x = (torch.cos(phase) * antialiasing * alphas).sum(1, keepdim=True)
         x = x * amplitude
 
-        return x
+        return x, {"amp": amplitude, "alphas": alphas}
 
 
 class Noise(Synth):
@@ -82,11 +84,11 @@ class Noise(Synth):
         self.register_buffer("window", window)
 
     def window_filters(self, x):
-        x = fft.irfft(x, norm="ortho")
+        x = fft.irfft(x)
         x = torch.roll(x, self.n_band)
         x = x * self.window
         x = torch.nn.functional.pad(x, (0, self.upsample_factor - x.shape[-1]))
-        x = fft.rfft(x, norm="ortho")
+        x = fft.rfft(x)
         return x
 
     def forward(self, x):
@@ -96,37 +98,44 @@ class Noise(Synth):
         noise = torch.rand(x.shape[0], x.shape[1],
                            self.upsample_factor).to(x.device)
         noise = 2 * noise - 1
-        noise = fft.rfft(noise, norm="ortho")
+        noise = fft.rfft(noise)
 
         noise = x * noise
 
-        noise = fft.irfft(noise, norm="ortho")
+        noise = fft.irfft(noise)
         noise = noise.reshape(noise.shape[0], 1, -1)
 
         return noise
 
 
 class Reverb(Synth):
-    def __init__(self):
+    def __init__(self, sampling_rate):
         super().__init__()
-        self.wet = nn.Parameter(torch.tensor(.5))
-        self.decay = nn.Parameter(torch.tensor(0.))
+        self.wet = nn.Parameter(torch.tensor(0.))
+        self.decay = nn.Parameter(torch.tensor(4.))
+        self.sampling_rate = sampling_rate
 
     def forward(self, x):
-        t = torch.arange(x.shape[-1]).to(x)
-        wet = (2 * torch.rand_like(x) - 1)
-        wet = torch.exp(-torch.exp(self.decay) * t) * wet
+        noise = 2 * torch.rand_like(x) - 1
+        t = torch.arange(noise.shape[-1]) / self.sampling_rate
+        ramp = torch.exp(-torch.exp(self.decay) * t)
+        noise = noise * ramp
 
-        dry = torch.zeros_like(x)
-        dry[..., 0] = 1
+        identity = torch.zeros_like(noise)
+        identity[..., 0] = 1
 
-        impulse = wet * self.wet + dry * (1 - self.wet)
+        wet = torch.sigmoid(self.wet)
+        impulse = identity * (1 - wet) + noise * wet
 
-        impulse = fft.rfft(impulse, norm="ortho")
-        x = fft.rfft(x, norm="ortho")
+        N = x.shape[-1]
+        x = nn.functional.pad(x, (N, 0))
+        impulse = nn.functional.pad(impulse, (0, N))
 
-        x = impulse * x
+        impulse_f = fft.rfft(impulse)
+        x = fft.rfft(x)
 
-        x = fft.irfft(x, norm="ortho")
+        x = impulse_f * x
 
-        return x
+        x = fft.irfft(x)[..., N:]
+
+        return x, {"ramp": ramp, "noise": noise, "impulse": impulse}

@@ -5,6 +5,8 @@ from .base_layers import RecurrentBlock
 from .synth import Harmonic, Noise, Reverb
 from .complex_utils import complex_abs
 
+import torch.fft as fft
+
 
 class DDSP(nn.Module):
     def __init__(self, recurrent_args, harmonic_args, noise_args, scales):
@@ -12,17 +14,24 @@ class DDSP(nn.Module):
         self.recurrent_block = RecurrentBlock(**recurrent_args)
         self.harmonic = Harmonic(**harmonic_args)
         self.noise = Noise(**noise_args)
-        self.reverb = Reverb()
+        self.reverb = Reverb(harmonic_args["sampling_rate"])
         self.scales = scales
 
     def forward(self, pitch, loudness):
         hidden = self.recurrent_block([pitch, loudness])
 
-        y = self.harmonic(hidden, pitch)
-        y += self.noise(hidden)
-        y = self.reverb(y)
+        artifacts = {}
 
-        return y
+        y, _art = self.harmonic(hidden, pitch)
+        artifacts.update(_art)
+
+        noise = self.noise(hidden)
+        y = y + noise / 1000
+
+        y, _art = self.reverb(y)
+        artifacts.update(_art)
+
+        return y, artifacts
 
     def multiScaleFFT(self, x):
         stfts = []
@@ -33,6 +42,7 @@ class DDSP(nn.Module):
                 window=torch.hann_window(scale).to(x),
                 hop_length=int((.25) * scale),
                 center=False,
+                return_complex=True,
             )
-            stfts.append(complex_abs(S))
+            stfts.append(S.abs())
         return stfts

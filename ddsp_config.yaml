@@ -1,9 +1,9 @@
 # DDSP CONFIGURATION FILE
 training:
   batch: 16
-  name: "test_violin"
+  name: "test_violin_harmonic_hilr"
   root: "runs"
-  lr: .0001
+  lr: .001
   epochs: 1000
   scales: [2048, 1024, 512, 256, 128, 64]
 
@@ -11,8 +11,8 @@ data:
   sampling_rate: &sr 24000
   block_size: &block_size 256
   signal_size: 32768
-  preprocessed: "/fast-1/tmp/ddsp_violin/"
-  wav_loc: "/fast-2/datasets/Solv4_strings_wav/audio/Violin/"
+  preprocessed: "/fast-1/tmp/johngarner/"
+  wav_loc: "/slow-2/antoine/johngarner/"
 
 recurrent_args:
   n_inputs: 2
