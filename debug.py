@@ -3,10 +3,14 @@
 from types import SimpleNamespace
 
 import torch
+
+torch.set_grad_enabled(False)
+
 import yaml
 
 from ddsp.model import DDSP
 import matplotlib.pyplot as plt
+import librosa as li
 
 with open("ddsp_config.yaml", "r") as config:
     config = yaml.safe_load(config)
@@ -14,13 +18,12 @@ with open("ddsp_config.yaml", "r") as config:
     ddsp = DDSP(config.recurrent_args, config.harmonic_args, config.noise_args,
                 config.training["scales"])
 
-f0 = torch.randn(1, 100, 1)
+f0 = torch.linspace(100, 300, 100).reshape(1, 100, 1)
 lo = torch.randn(1, 100, 1)
 
-hidden = ddsp.recurrent_block([f0, lo])
-hidden = torch.randn_like(hidden)
+y = ddsp(f0, lo).reshape(-1).numpy()
 
-noise = ddsp.noise(hidden)
-
-plt.plot(noise.reshape(-1).detach().cpu().numpy())
+Y = li.amplitude_to_db(li.feature.melspectrogram(y))
+plt.imshow(Y, aspect="auto", origin="lower")
+plt.colorbar()
 # %%

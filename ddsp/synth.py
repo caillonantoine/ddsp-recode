@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import math
 from .complex_utils import complex_abs, complex_product
+import torch.fft as fft
 
 
 def mod_sigmoid(x):
@@ -77,33 +78,29 @@ class Noise(Synth):
 
         self.proj_noise = nn.Linear(feature_out, n_band)
 
-        window = torch.hann_window(n_band * 2 - 1)
+        window = torch.hann_window((n_band - 1) * 2)
         self.register_buffer("window", window)
 
     def window_filters(self, x):
-        x = x.unsqueeze(-1).expand(*x.shape, 2).contiguous()
-        x[..., 1] = 0
-        x = torch.irfft(x, 1, normalized=True)
+        x = fft.irfft(x, norm="ortho")
         x = torch.roll(x, self.n_band)
         x = x * self.window
         x = torch.nn.functional.pad(x, (0, self.upsample_factor - x.shape[-1]))
-        x = torch.rfft(x, 1, normalized=True)
+        x = fft.rfft(x, norm="ortho")
         return x
 
     def forward(self, x):
         x = mod_sigmoid(self.proj_noise(x))
         x = self.window_filters(x)
-        # x = torch.view_as_complex(x)
 
-        noise = torch.rand(x.shape[0], x.shape[1], self.upsample_factor)
+        noise = torch.rand(x.shape[0], x.shape[1],
+                           self.upsample_factor).to(x.device)
         noise = 2 * noise - 1
-        noise = torch.rfft(noise, 1, normalized=True).to(x)
-        # noise = torch.view_as_complex(noise).to(x)
+        noise = fft.rfft(noise, norm="ortho")
 
-        noise = complex_product(x, noise)
+        noise = x * noise
 
-        # noise = torch.view_as_real(noisse)
-        noise = torch.irfft(noise, 1, normalized=True)[..., :-1]
+        noise = fft.irfft(noise, norm="ortho")
         noise = noise.reshape(noise.shape[0], 1, -1)
 
         return noise
@@ -124,10 +121,12 @@ class Reverb(Synth):
         dry[..., 0] = 1
 
         impulse = wet * self.wet + dry * (1 - self.wet)
-        impulse = torch.rfft(impulse, 1, normalized=True)
 
-        x = torch.rfft(x, 1, normalized=True)
-        x = complex_product(impulse, x)
-        x = torch.irfft(x, 1, normalized=True)[..., :t.shape[-1]]
+        impulse = fft.rfft(impulse, norm="ortho")
+        x = fft.rfft(x, norm="ortho")
+
+        x = impulse * x
+
+        x = fft.irfft(x, norm="ortho")
 
         return x
