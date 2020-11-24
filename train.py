@@ -17,6 +17,10 @@ from ddsp.synth import Harmonic, Noise
 from ddsp.viz import VizHook
 
 import soundfile as sf
+from einops import rearrange
+
+import logging
+logging.basicConfig(level=logging.ERROR)
 
 with open("ddsp_config.yaml", "r") as config:
     config = yaml.safe_load(config)
@@ -30,20 +34,37 @@ def preprocess(name):
     except Exception as e:
         print(e)
         return None
+
     N = config["data"]["signal_size"]
     pad = (N - (len(x) % N)) % N
     x = np.pad(x, (0, pad))
 
     step_size = config["data"]["block_size"] / config["data"]["sampling_rate"]
-    f0 = crepe.predict(x, sr, step_size=1000 * step_size)[1]
-
-    loudness = li.feature.rms(x, hop_length=config["data"]["block_size"])
-    loudness = np.log(loudness + 1e-5)
+    # f0 = crepe.predict(x, sr, step_size=1000 * step_size)[1]
 
     x = x.reshape(-1, N)
-    crop = N // config["data"]["block_size"] * x.shape[0]
-    f0 = f0[..., :crop].reshape(x.shape[0], -1)
-    loudness = loudness[..., :crop].reshape(x.shape[0], -1)
+    loudness = rearrange(
+        x,
+        "batch (block time) -> batch block time",
+        time=config["data"]["block_size"],
+    )**2
+    window = np.hamming(config["data"]["block_size"])
+    window = window / np.sum(window)
+    loudness = np.sum(loudness * window, -1)
+    loudness = np.log(loudness + 1e-10)
+
+    f0 = []
+    crop = N // config["data"]["block_size"]
+    for sample in x:
+        f0.append(
+            crepe.predict(
+                sample,
+                sr,
+                step_size=1000 * step_size,
+                verbose=0,
+            )[1][:crop])
+    f0 = np.stack(f0, 0)
+    loudness = loudness[..., :crop * x.shape[0]].reshape(x.shape[0], -1)
 
     x = x.astype(np.float32)
     f0 = f0.astype(np.float32)
@@ -98,28 +119,39 @@ opt = torch.optim.Adam(model.parameters(), config["training"]["lr"])
 step = 0
 for e in range(config["training"]["epochs"]):
     for x, f0, loudness in tqdm(trainloader):
+        logging.debug("sending data to device")
         x = x.to(device)
         f0 = f0.unsqueeze(-1).to(device)
         loudness = loudness.unsqueeze(-1).to(device)
         loudness = (loudness - mean_loudness) / std_loudness
 
+        logging.debug("forward pass")
         y, artifacts = model(f0, loudness)
         y = y.squeeze(1)
 
+        logging.debug("compute original multiscale")
         with torch.no_grad():
             Sx = model.multiScaleFFT(x)
 
+        logging.debug("compute synthed multiscale")
         Sy = model.multiScaleFFT(y)
 
+        logging.debug("compute loss")
         loss_lin = sum([(sx - sy).abs().mean() for sx, sy in zip(Sx, Sy)])
         loss_log = sum([
             (torch.log(sx + 1e-4) - torch.log(sy + 1e-4)).abs().mean()
             for sx, sy in zip(Sx, Sy)
         ])
 
-        loss = loss_lin + loss_log  #- .1 * torch.log(artifacts["amp"].mean())
+        loss = loss_lin + loss_log
 
+        if step < 1000:
+            loss -= .1 * torch.log(artifacts["amp"].mean())
+
+        logging.debug("backward pass")
         loss.backward()
+
+        logging.debug("step")
         opt.step()
 
         if not step % 100:
@@ -158,6 +190,11 @@ for e in range(config["training"]["epochs"]):
                 step,
             )
 
+            plt.plot(
+                artifacts["impulse"][0].reshape(-1).cpu().detach().numpy())
+            plt.tight_layout()
+            writer.add_figure("impulse", plt.gcf(), step)
+
             Sx = np.log(Sx[0][0].cpu().detach().numpy() + 1e-3)
             Sy = np.log(Sy[0][0].cpu().detach().numpy() + 1e-3)
 
@@ -175,6 +212,15 @@ for e in range(config["training"]["epochs"]):
 
             plt.plot(y[0].reshape(-1).cpu().detach().numpy())
             writer.add_figure("synth_signal", plt.gcf(), step)
+
+            plt.plot(x[0].reshape(-1).cpu().detach().numpy())
+            writer.add_figure("source_signal", plt.gcf(), step)
+
+            plt.plot(f0[0].reshape(-1).cpu().detach().numpy())
+            writer.add_figure("pitch", plt.gcf(), step)
+
+            plt.plot(loudness[0].reshape(-1).cpu().detach().numpy())
+            writer.add_figure("loudness", plt.gcf(), step)
 
             audio = torch.cat([x, y], -1).reshape(-1)
             sf.write(

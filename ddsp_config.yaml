@@ -4,15 +4,17 @@ training:
   name: "test_violin_harmonic_hilr"
   root: "runs"
   lr: .001
-  epochs: 1000
+  epochs: 10000
   scales: [2048, 1024, 512, 256, 128, 64]
 
 data:
-  sampling_rate: &sr 24000
-  block_size: &block_size 256
-  signal_size: 32768
-  preprocessed: "/fast-1/tmp/johngarner/"
-  wav_loc: "/slow-2/antoine/johngarner/"
+  sampling_rate: &sr 16000
+  block_size: &block_size 160
+  signal_size: 64000
+  # preprocessed: "/fast-1/tmp/johngarner/"
+  preprocessed: "/fast-1/tmp/harm/"
+  # wav_loc: "/slow-2/antoine/johngarner/"
+  wav_loc: "/slow-2/antoine/harm/"
 
 recurrent_args:
   n_inputs: 2

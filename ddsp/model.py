@@ -17,18 +17,25 @@ class DDSP(nn.Module):
         self.reverb = Reverb(harmonic_args["sampling_rate"])
         self.scales = scales
 
+        for p in self.parameters():
+            if p.requires_grad:
+                try:
+                    nn.init.xavier_normal_(p)
+                except:
+                    pass
+
     def forward(self, pitch, loudness):
-        hidden = self.recurrent_block([pitch, loudness])
+        hidden = self.recurrent_block(pitch, loudness)
 
         artifacts = {}
 
-        y, _art = self.harmonic(hidden, pitch)
+        y, _art = self.harmonic(hidden.clone(), pitch)
         artifacts.update(_art)
 
-        noise = self.noise(hidden)
-        y = y + noise
+        noise = self.noise(hidden.clone())
+        # y = y + noise
 
-        y, _art = self.reverb(y)
+        _y, _art = self.reverb(y)
         artifacts.update(_art)
 
         return y, artifacts

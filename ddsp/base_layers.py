@@ -47,11 +47,11 @@ class RecurrentBlock(nn.Module):
             batch_first=True,
         )
 
-    def forward(self, inputs):
-        x = torch.cat(
-            [self.in_mlps[i](inputs[i]) for i in range(self.n_inputs)],
-            -1,
-        )
+    def forward(self, pitch, loudness):
+        pitch = self.in_mlps[0](pitch)
+        loudness = self.in_mlps[1](loudness)
+
+        x = torch.cat([pitch, loudness], -1)
         x = self.gru(x)[0]
 
         return self.out_mlp(x)

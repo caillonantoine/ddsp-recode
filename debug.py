@@ -48,6 +48,7 @@ plt.show()
 # %%
 import torch
 import torch.fft as fft
+
 x = 2 * torch.rand(8192) - 1
 x_f = fft.rfft(x, norm="backward")
 
@@ -55,3 +56,19 @@ y = fft.irfft(x_f, norm="backward")
 
 print(x)
 print(y)
+#%%
+import librosa as li
+import torch
+import soundfile as sf
+from einops import rearrange
+test, sr = li.load("runs/test_violin_harmonic_hilr/audio_000000.wav", 24000)
+test = torch.from_numpy(test).float()
+
+test = rearrange(test, "(b c t) -> (b t) c", b=16, c=2)
+sf.write("debug.wav", test.numpy(), 24000)
+# %%
+import crepe
+out = crepe.predict(test, sr)
+# %%
+out
+# %%

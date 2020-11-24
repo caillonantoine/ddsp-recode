@@ -46,25 +46,25 @@ class Harmonic(Synth):
         with torch.no_grad():
             f0 = self.upsample(f0)
 
-        h_index = torch.arange(1, self.n_harmonic + 1).reshape(1, -1, 1).to(x)
+            h_index = torch.arange(1, self.n_harmonic + 1).reshape(1, -1,
+                                                                   1).to(x)
 
-        phase = 2 * math.pi * torch.cumsum(f0, -1) / self.sampling_rate
-        phase = phase % (2 * math.pi)
-        phase = phase * h_index
+            phase = 2 * math.pi * torch.cumsum(f0, -1) / self.sampling_rate
+            phase = phase * h_index
 
-        f0s = f0 * h_index
-        antialiasing = f0s < self.sampling_rate / 2
+            f0s = f0 * h_index
+            antialiasing = f0s < self.sampling_rate / 2
 
         alphas = mod_sigmoid(self.proj_alphas(x))
         alphas = self.upsample(alphas.transpose(1, 2))
-        alphas = alphas * antialiasing
         alphas = alphas / alphas.sum(1, keepdim=True)
+        alphas = alphas * antialiasing
 
         amplitude = mod_sigmoid(self.proj_amplitude(x))
         amplitude = self.upsample(amplitude.transpose(1, 2))
 
-        x = (torch.cos(phase) * antialiasing * alphas).sum(1, keepdim=True)
-        # x = x * amplitude
+        x = (torch.sin(phase) * alphas).sum(1, keepdim=True)
+        x = x * amplitude
 
         return x, {"amp": amplitude, "alphas": alphas}
 
@@ -97,7 +97,7 @@ class Noise(Synth):
 
         noise = torch.rand(x.shape[0], x.shape[1],
                            self.upsample_factor).to(x.device)
-        noise = 2 * noise - 1
+        noise = (2 * noise - 1) / 100
         noise = fft.rfft(noise)
 
         noise = x * noise
@@ -126,6 +126,8 @@ class Reverb(Synth):
 
         wet = torch.sigmoid(self.wet)
         impulse = identity * (1 - wet) + noise * wet
+
+        impulse = impulse / impulse.sum(-1, keepdim=True)
 
         N = x.shape[-1]
         x = nn.functional.pad(x, (N, 0))
