@@ -17,6 +17,7 @@ class Harmonic(nn.Module):
 
         self.proj_alphas = nn.Linear(feature_out, n_harmonic)
         self.proj_amplitude = nn.Linear(feature_out, 1)
+
         self.upsample_factor = upsample_factor
         self.sampling_rate = sampling_rate
 
@@ -29,31 +30,25 @@ class Harmonic(nn.Module):
     def forward(self, hidden, f0):
         alphas = mod_sigmoid(self.proj_alphas(hidden))
         alphas = self.upsample(alphas.transpose(1, 2))
-        alphas = alphas / alphas.sum(1, keepdim=True)
-        alphas = alphas.contiguous()
 
         amplitude = mod_sigmoid(self.proj_amplitude(hidden))
         amplitude = self.upsample(amplitude.transpose(1, 2))
-        amplitude = amplitude.contiguous()
 
         f0 = f0.reshape(f0.shape[0], 1, -1)
         f0 = self.upsample(f0) / self.sampling_rate
-        f0 = f0.contiguous()
 
         h_index = torch.arange(1, self.n_harmonic + 1).reshape(1, -1, 1)
         h_index = h_index.to(hidden)
-        h_index = h_index.contiguous()
 
         phase = 2 * math.pi * torch.cumsum(f0, -1)
         phase = phase * h_index
-        phase = phase.contiguous()
 
         antialiasing = (f0 * h_index < .5).float()
-        antialiasing = antialiasing.contiguous()
+        alphas = alphas * antialiasing
+        alphas = alphas / alphas.sum(1, keepdim=True)
 
-        y = (torch.sin(phase) * alphas * antialiasing).sum(1, keepdim=True)
+        y = (torch.sin(phase) * alphas).sum(1, keepdim=True)
         y = y * amplitude
-        y = y.contiguous()
 
         return y, {"amp": amplitude, "alphas": alphas}
 

@@ -148,7 +148,7 @@ for e in range(config["training"]["epochs"]):
             log_loss = log_loss + (torch.log(sx + 1e-6) -
                                    torch.log(sy + 1e-6)).abs().mean()
 
-        loss = lin_loss + log_loss - .1 * torch.log(artifacts["amp"].mean())
+        loss = lin_loss + log_loss  # - .1 * torch.log(artifacts["amp"].mean())
 
         logging.debug("backward pass")
         loss.backward()
