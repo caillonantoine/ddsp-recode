@@ -9,21 +9,7 @@ def mod_sigmoid(x):
     return 2 * torch.sigmoid(x).pow(math.log(10)) + 1e-7
 
 
-class Synth(nn.Module):
-    @property
-    def f0_cdt(self):
-        return False
-
-    @property
-    def lo_cdt(self):
-        return False
-
-
-class Harmonic(Synth):
-    @property
-    def f0_cdt(self):
-        return True
-
+class Harmonic(nn.Module):
     def __init__(self, feature_out, n_harmonic, upsample_factor,
                  sampling_rate):
         super().__init__()
@@ -41,35 +27,31 @@ class Harmonic(Synth):
         )
 
     def forward(self, x, f0):
-        f0 = f0.reshape(f0.shape[0], 1, -1)
-
-        with torch.no_grad():
-            f0 = self.upsample(f0)
-
-            h_index = torch.arange(1, self.n_harmonic + 1).reshape(1, -1,
-                                                                   1).to(x)
-
-            phase = 2 * math.pi * torch.cumsum(f0, -1) / self.sampling_rate
-            phase = phase * h_index
-
-            f0s = f0 * h_index
-            antialiasing = f0s < self.sampling_rate / 2
-
         alphas = mod_sigmoid(self.proj_alphas(x))
         alphas = self.upsample(alphas.transpose(1, 2))
         alphas = alphas / alphas.sum(1, keepdim=True)
-        alphas = alphas * antialiasing
 
-        amplitude = mod_sigmoid(self.proj_amplitude(x))
+        amplitude = nn.functional.softplus(self.proj_amplitude(x))
         amplitude = self.upsample(amplitude.transpose(1, 2))
 
-        x = (torch.sin(phase) * alphas).sum(1, keepdim=True)
+        f0 = f0.reshape(f0.shape[0], 1, -1)
+        f0 = self.upsample(f0) / self.sampling_rate
+
+        h_index = torch.arange(1, self.n_harmonic + 1).reshape(1, -1, 1).to(x)
+
+        phase = 2 * math.pi * torch.cumsum(f0, -1)
+        phase = phase * h_index
+
+        f0s = f0 * h_index
+        antialiasing = (f0s < .5).float()
+
+        x = (torch.sin(phase) * alphas * antialiasing).sum(1, keepdim=True)
         x = x * amplitude
 
         return x, {"amp": amplitude, "alphas": alphas}
 
 
-class Noise(Synth):
+class Noise(nn.Module):
     def __init__(self, feature_out, n_band, upsample_factor, sampling_rate):
         super().__init__()
 
@@ -108,7 +90,7 @@ class Noise(Synth):
         return noise
 
 
-class Reverb(Synth):
+class Reverb(nn.Module):
     def __init__(self, sampling_rate):
         super().__init__()
         self.wet = nn.Parameter(torch.tensor(0.))

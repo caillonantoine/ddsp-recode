@@ -7,6 +7,7 @@ import librosa as li
 import yaml
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+import math
 
 import crepe
 from udls import SimpleDataset
@@ -40,7 +41,6 @@ def preprocess(name):
     x = np.pad(x, (0, pad))
 
     step_size = config["data"]["block_size"] / config["data"]["sampling_rate"]
-    # f0 = crepe.predict(x, sr, step_size=1000 * step_size)[1]
 
     x = x.reshape(-1, N)
     loudness = rearrange(
@@ -120,9 +120,11 @@ step = 0
 for e in range(config["training"]["epochs"]):
     for x, f0, loudness in tqdm(trainloader):
         logging.debug("sending data to device")
+
         x = x.to(device)
         f0 = f0.unsqueeze(-1).to(device)
         loudness = loudness.unsqueeze(-1).to(device)
+
         loudness = (loudness - mean_loudness) / std_loudness
 
         logging.debug("forward pass")
@@ -137,16 +139,14 @@ for e in range(config["training"]["epochs"]):
         Sy = model.multiScaleFFT(y)
 
         logging.debug("compute loss")
-        loss_lin = sum([(sx - sy).abs().mean() for sx, sy in zip(Sx, Sy)])
-        loss_log = sum([
-            (torch.log(sx + 1e-4) - torch.log(sy + 1e-4)).abs().mean()
-            for sx, sy in zip(Sx, Sy)
-        ])
+        lin_loss = 0
+        log_loss = 0
+        for sx, sy in zip(Sx, Sy):
+            lin_loss = lin_loss + (sx - sy).abs().mean()
+            log_loss = log_loss + (torch.log(sx + 1e-6) -
+                                   torch.log(sy + 1e-6)).abs().mean()
 
-        loss = loss_lin + loss_log
-
-        if step < 1000:
-            loss -= .1 * torch.log(artifacts["amp"].mean())
+        loss = lin_loss + log_loss
 
         logging.debug("backward pass")
         loss.backward()
@@ -198,16 +198,12 @@ for e in range(config["training"]["epochs"]):
             Sx = np.log(Sx[0][0].cpu().detach().numpy() + 1e-3)
             Sy = np.log(Sy[0][0].cpu().detach().numpy() + 1e-3)
 
-            plt.subplot(121)
-            plt.imshow(Sx, aspect="auto", origin="lower")
-            plt.colorbar()
+            S = np.stack([Sx, Sy], 0)
+            S = rearrange(S, "b w h -> (b w) h")
 
-            plt.subplot(122)
-            plt.imshow(Sy, aspect="auto", origin="lower")
+            plt.imshow(S, aspect="auto", origin="lower")
             plt.colorbar()
-
             plt.tight_layout()
-
             writer.add_figure("reconstruction", plt.gcf(), step)
 
             plt.plot(y[0].reshape(-1).cpu().detach().numpy())
