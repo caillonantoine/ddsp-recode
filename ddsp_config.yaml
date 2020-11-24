@@ -12,9 +12,7 @@ data:
   block_size: &block_size 160
   signal_size: 64000
   preprocessed: "/fast-1/tmp/johngarner/"
-  # preprocessed: "/fast-1/tmp/harm/"
   wav_loc: "/slow-2/antoine/johngarner/"
-  # wav_loc: "/slow-2/antoine/harm/"
 
 recurrent_args:
   n_inputs: 2
@@ -23,13 +21,11 @@ recurrent_args:
   n_layers: 3
 
 harmonic_args:
-  feature_out: *feature_out
-  n_harmonic: 101
-  upsample_factor: *block_size
   sampling_rate: *sr
+  upsampling: *block_size
+  n_harmonic: 101
 
 noise_args:
-  feature_out: *feature_out
-  n_band: 65
-  upsample_factor: *block_size
   sampling_rate: *sr
+  upsampling: *block_size
+  n_band: 65

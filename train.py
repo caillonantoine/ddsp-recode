@@ -124,21 +124,22 @@ for e in range(config["training"]["epochs"]):
         logging.debug("sending data to device")
 
         x = x.to(device)
-        f0 = f0.unsqueeze(-1).to(device)
-        loudness = loudness.unsqueeze(-1).to(device)
+
+        f0 = f0.unsqueeze(1).to(device)
+        loudness = loudness.unsqueeze(1).to(device)
 
         loudness = (loudness - mean_loudness) / std_loudness
 
         logging.debug("forward pass")
-        y, artifacts = model(f0, loudness)
+        y = model(f0, loudness)
         y = y.squeeze(1)
 
         logging.debug("compute original multiscale")
         with torch.no_grad():
-            Sx = model.multiScaleFFT(x)
+            Sx = model.multiScaleStft(x)
 
         logging.debug("compute synthed multiscale")
-        Sy = model.multiScaleFFT(y)
+        Sy = model.multiScaleStft(y)
 
         logging.debug("compute loss")
         lin_loss = 0
