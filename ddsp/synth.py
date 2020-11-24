@@ -23,32 +23,39 @@ class Harmonic(nn.Module):
         self.upsample = nn.Upsample(
             scale_factor=upsample_factor,
             mode="linear",
-            align_corners=True,
+            align_corners=False,
         )
 
-    def forward(self, x, f0):
-        alphas = mod_sigmoid(self.proj_alphas(x))
+    def forward(self, hidden, f0):
+        alphas = mod_sigmoid(self.proj_alphas(hidden))
         alphas = self.upsample(alphas.transpose(1, 2))
         alphas = alphas / alphas.sum(1, keepdim=True)
+        alphas = alphas.contiguous()
 
-        amplitude = nn.functional.softplus(self.proj_amplitude(x))
+        amplitude = mod_sigmoid(self.proj_amplitude(hidden))
         amplitude = self.upsample(amplitude.transpose(1, 2))
+        amplitude = amplitude.contiguous()
 
         f0 = f0.reshape(f0.shape[0], 1, -1)
         f0 = self.upsample(f0) / self.sampling_rate
+        f0 = f0.contiguous()
 
-        h_index = torch.arange(1, self.n_harmonic + 1).reshape(1, -1, 1).to(x)
+        h_index = torch.arange(1, self.n_harmonic + 1).reshape(1, -1, 1)
+        h_index = h_index.to(hidden)
+        h_index = h_index.contiguous()
 
         phase = 2 * math.pi * torch.cumsum(f0, -1)
         phase = phase * h_index
+        phase = phase.contiguous()
 
-        f0s = f0 * h_index
-        antialiasing = (f0s < .5).float()
+        antialiasing = (f0 * h_index < .5).float()
+        antialiasing = antialiasing.contiguous()
 
-        x = (torch.sin(phase) * alphas * antialiasing).sum(1, keepdim=True)
-        x = x * amplitude
+        y = (torch.sin(phase) * alphas * antialiasing).sum(1, keepdim=True)
+        y = y * amplitude
+        y = y.contiguous()
 
-        return x, {"amp": amplitude, "alphas": alphas}
+        return y, {"amp": amplitude, "alphas": alphas}
 
 
 class Noise(nn.Module):
@@ -94,7 +101,7 @@ class Reverb(nn.Module):
     def __init__(self, sampling_rate):
         super().__init__()
         self.wet = nn.Parameter(torch.tensor(0.))
-        self.decay = nn.Parameter(torch.tensor(4.))
+        self.decay = nn.Parameter(torch.tensor(2.))
         self.sampling_rate = sampling_rate
 
     def forward(self, x):

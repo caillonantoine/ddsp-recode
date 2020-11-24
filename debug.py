@@ -61,11 +61,11 @@ import librosa as li
 import torch
 import soundfile as sf
 from einops import rearrange
-test, sr = li.load("runs/test_violin_harmonic_hilr/audio_000000.wav", 24000)
+test, sr = li.load("runs/test_violin_harmonic_hilr/audio_001200.wav", 16000)
 test = torch.from_numpy(test).float()
 
 test = rearrange(test, "(b c t) -> (b t) c", b=16, c=2)
-sf.write("debug.wav", test.numpy(), 24000)
+sf.write("debug.wav", test.numpy(), 16000)
 # %%
 import crepe
 out = crepe.predict(test, sr)

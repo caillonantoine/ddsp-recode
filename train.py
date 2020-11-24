@@ -58,10 +58,12 @@ def preprocess(name):
     for sample in x:
         f0.append(
             crepe.predict(
-                sample,
+                np.pad(sample, (0, 10 * config["data"]["block_size"])),
                 sr,
                 step_size=1000 * step_size,
                 verbose=0,
+                center=False,
+                viterbi=True,
             )[1][:crop])
     f0 = np.stack(f0, 0)
     loudness = loudness[..., :crop * x.shape[0]].reshape(x.shape[0], -1)
@@ -146,7 +148,7 @@ for e in range(config["training"]["epochs"]):
             log_loss = log_loss + (torch.log(sx + 1e-6) -
                                    torch.log(sy + 1e-6)).abs().mean()
 
-        loss = lin_loss + log_loss
+        loss = lin_loss + log_loss - .1 * torch.log(artifacts["amp"].mean())
 
         logging.debug("backward pass")
         loss.backward()

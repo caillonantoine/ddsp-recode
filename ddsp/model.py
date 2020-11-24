@@ -26,9 +26,9 @@ class DDSP(nn.Module):
         artifacts.update(_art)
 
         noise = self.noise(hidden.clone())
-        # y = y + noise
+        y = y + noise
 
-        y, _art = self.reverb(y)
+        _y, _art = self.reverb(y)
         artifacts.update(_art)
 
         return y, artifacts
