@@ -3,12 +3,12 @@ import soundfile as sf
 import librosa as li
 from tqdm import tqdm
 import os
-from .torch_ddsp.hparams import preprocess
-from .torch_ddsp.ddsp import NeuralSynth
+from torch_ddsp.hparams import preprocess
+from torch_ddsp.ddsp import NeuralSynth
 import torch
 from glob import glob
-from pyworld import dio
-# import crepe
+# from pyworld import dio
+import crepe
 
 multiScaleFFT = NeuralSynth().multiScaleFFT
 amp = lambda x: x[:,:,0]**2 + x[:,:,1]**2
@@ -67,7 +67,6 @@ def process(filename, block_size, sequence_size):
     sound = BatchSoundFiles(glob(filename))
     batch = len(sound)
     print(f"Splitting data into {batch} examples of {sequence_size}-deep sequences of {block_size} samples.")
-    exit()
 
     scales = preprocess.fft_scales
     sp = []

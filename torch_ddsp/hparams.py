@@ -1,10 +1,10 @@
 class preprocess:
-    input_filename = "/fast-2/datasets/Solv4_strings_wav/audio/Violin/**/*.wav" # must be a mono, 16000Hz .wav file
+    input_filename = "/slow-2/antoine/johngarner/wavs/*.wav" # must be a mono, 16000Hz .wav file
     samplerate     = 16000 # Used when synth back audio
     output_dir     = "output"
 
     # F0 ESTIMATION ALGORITHM (dio or crepe) ###################################
-    f0_estimation = "dio"
+    f0_estimation = "crepe"
 
 
     # Multi scale stft objective
