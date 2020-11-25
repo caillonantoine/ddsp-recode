@@ -131,12 +131,11 @@ for e in range(config["training"]["epochs"]):
         loudness = (loudness - mean_loudness) / std_loudness
 
         logging.debug("forward pass")
-        y = model(f0, loudness)
+        y, artifacts = model(f0, loudness)
         y = y.squeeze(1)
 
         logging.debug("compute original multiscale")
-        with torch.no_grad():
-            Sx = model.multiScaleStft(x)
+        Sx = model.multiScaleStft(x)
 
         logging.debug("compute synthed multiscale")
         Sy = model.multiScaleStft(y)
@@ -193,10 +192,10 @@ for e in range(config["training"]["epochs"]):
                 step,
             )
 
-            plt.plot(
-                artifacts["impulse"][0].reshape(-1).cpu().detach().numpy())
-            plt.tight_layout()
-            writer.add_figure("impulse", plt.gcf(), step)
+            # plt.plot(
+            #     artifacts["impulse"][0].reshape(-1).cpu().detach().numpy())
+            # plt.tight_layout()
+            # writer.add_figure("impulse", plt.gcf(), step)
 
             Sx = np.log(Sx[0][0].cpu().detach().numpy() + 1e-3)
             Sy = np.log(Sy[0][0].cpu().detach().numpy() + 1e-3)
@@ -225,7 +224,7 @@ for e in range(config["training"]["epochs"]):
             sf.write(
                 path.join(root, f"audio_{step:06d}.wav"),
                 audio.cpu().detach().numpy(),
-                model.harmonic.sampling_rate,
+                model.harm_synth.sampling_rate,
             )
 
             torch.save(model.state_dict(), path.join(root, "state.pth"))

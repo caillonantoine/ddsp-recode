@@ -44,9 +44,11 @@ class DDSP(nn.Module):
         harmonic = self.harm_synth(amp, alphas, pitch)
         noise = self.noise_synth(bands)
 
-        mixdown = self.reverb(harmonic + noise)
+        mixdown = self.reverb(harmonic)  # + noise)
 
-        return mixdown
+        artifacts = {"alphas": alphas, "amp": amp}
+
+        return mixdown, artifacts
 
     def multiScaleStft(self, x):
         stfts = []
