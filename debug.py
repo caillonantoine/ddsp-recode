@@ -1,31 +1,36 @@
 #%%
 import torch
-from ddsp.model import DDSP
-import matplotlib.pyplot as plt
 import librosa as li
-import yaml
-torch.set_grad_enabled(False)
+from einops import rearrange
+import numpy as np
+import matplotlib.pyplot as plt
 
+x, sr = li.load("runs/test_violin_harmonic_hilr/audio_000000.wav", 16000)
 
-def specshow(y):
-    Y = li.feature.melspectrogram(y.numpy().reshape(-1))
-    Y = li.amplitude_to_db(Y)
-    plt.imshow(Y, aspect="auto", origin="lower")
-    plt.show()
+#%% RMS SIMPLE
+loudness = rearrange(
+    x,
+    "(block time) -> block time",
+    time=160,
+)**2
+win = np.hamming(160)
+win /= np.sum(win)
+loudness = np.sum(loudness * win, -1)
+loudness = np.log(loudness + 1e-4)
+print(loudness.shape)
 
+plt.plot(loudness)
+plt.xlim([0, 2000])
+plt.show()
+# %% RMS SPEC
+S = li.stft(x, n_fft=2048, hop_length=160, win_length=2048, center=True)
+S = abs(S)
+loudness = li.feature.rms(S=S, frame_length=2048,
+                          center=True).reshape(-1)[..., :-1]
+loudness = np.log(loudness + 1e-4)
+print(loudness.shape)
 
-with open("ddsp_config.yaml", "r") as config:
-    config = yaml.safe_load(config)
-
-ddsp = DDSP(
-    recurrent_args=config["recurrent_args"],
-    harmonic_args=config["harmonic_args"],
-    noise_args=config["noise_args"],
-    scales=[2048, 1024, 512, 256, 128, 64],
-)
-
-pitch = torch.linspace(100, 200, 100).reshape(1, 1, -1)
-loudness = torch.linspace(100, 200, 100).reshape(1, 1, -1)
-
-y = ddsp(pitch, loudness)
-specshow(y)
+plt.plot(loudness)
+plt.xlim([0, 2000])
+plt.show()
+# %%

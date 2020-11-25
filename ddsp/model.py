@@ -37,16 +37,19 @@ class DDSP(nn.Module):
             loudness.permute(0, 2, 1),
         )
 
+        artifacts = {}
+
         amp = mod_sigmoid(self.amp_lin(hidden).permute(0, 2, 1))
         alphas = mod_sigmoid(self.alphas_lin(hidden).permute(0, 2, 1))
         bands = mod_sigmoid(self.bands_lin(hidden).permute(0, 2, 1))
 
-        harmonic = self.harm_synth(amp, alphas, pitch)
+        harmonic, _art = self.harm_synth(amp, alphas, pitch)
+        artifacts.update(_art)
+
         noise = self.noise_synth(bands)
 
-        mixdown = self.reverb(harmonic)  # + noise)
-
-        artifacts = {"alphas": alphas, "amp": amp}
+        mixdown, _art = self.reverb(harmonic + noise)
+        artifacts.update(_art)
 
         return mixdown, artifacts
 
@@ -61,5 +64,6 @@ class DDSP(nn.Module):
                     scale,
                     center=False,
                     return_complex=True,
+                    window=torch.hamming_window(scale).to(x),
                 ).abs())
         return stfts

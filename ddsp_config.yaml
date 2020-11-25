@@ -3,9 +3,10 @@ training:
   batch: 16
   name: "test_violin_harmonic_hilr"
   root: "runs"
-  lr: .0001
+  lr: .00001
   epochs: 10000
-  scales: [2048, 1024, 512, 256, 128, 64]
+
+scales: [2048, 1024, 512, 256, 128, 64]
 
 data:
   sampling_rate: &sr 16000
@@ -24,6 +25,7 @@ harmonic_args:
   sampling_rate: *sr
   upsampling: *block_size
   n_harmonic: 101
+  smooth_size: 127
 
 noise_args:
   sampling_rate: *sr

@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.fft as fft
 import math
+from einops import rearrange
 
 
 def upsampling(x, factor):
@@ -14,15 +15,39 @@ def upsampling(x, factor):
 
 
 class HarmonicSynth(nn.Module):
-    def __init__(self, sampling_rate, upsampling, n_harmonic):
+    def __init__(self, sampling_rate, upsampling, n_harmonic, smooth_size):
         super().__init__()
         self.sampling_rate = sampling_rate
         self.upsampling = upsampling
         self.n_harmonic = n_harmonic
 
+        win = torch.hamming_window(smooth_size)
+        win /= torch.sum(win)
+        self.register_buffer("smoothing_win", win.reshape(1, 1, -1))
+        self.smooth_size = smooth_size
+
+    def smooth_envelope(self, x):
+        x = nn.functional.pad(
+            x,
+            (self.smooth_size // 2, self.smooth_size // 2),
+            mode="reflect",
+        )
+
+        h = x.shape[1]
+
+        x = rearrange(x, "b h t -> (b h) t").unsqueeze(1)
+        x = nn.functional.conv1d(x, self.smoothing_win)
+        x = rearrange(x.squeeze(1), "(b h) t -> b h t", h=h)
+
+        return x
+
     def forward(self, amplitude, alphas, pitch):
         amplitude = upsampling(amplitude, self.upsampling)
+        amplitude = self.smooth_envelope(amplitude)
+
         alphas = upsampling(alphas, self.upsampling)
+        alphas = self.smooth_envelope(alphas)
+
         pitch = upsampling(pitch, self.upsampling)
         pitch = pitch / self.sampling_rate
 
@@ -33,12 +58,13 @@ class HarmonicSynth(nn.Module):
         phase = indexes * phase
 
         aliasing = (pitch * indexes < .5).float()
+
         alphas = alphas * aliasing
         alphas /= alphas.sum(1, keepdim=True)
 
-        y = (torch.sin(phase) * alphas * amplitude).sum(1, keepdim=True)
+        y = amplitude * (torch.sin(phase) * alphas).sum(1, keepdim=True)
 
-        return y
+        return y, {"amp": amplitude, "alphas": alphas}
 
 
 class NoiseSynth(nn.Module):
@@ -80,9 +106,15 @@ class Reverb(nn.Module):
         self.wet = nn.Parameter(torch.tensor(0.))
         self.decay = nn.Parameter(torch.tensor(2.))
         self.sampling_rate = sampling_rate
+        self.impulse = nn.Parameter(
+            torch.rand(1, 1, self.sampling_rate) * 2 - 1)
 
-    def forward(self, x):
-        noise = 2 * torch.rand_like(x) - 1
+    def get_impulse(self, x):
+        noise = nn.functional.pad(
+            self.impulse,
+            (0, x.shape[-1] - self.impulse.shape[-1]),
+        )
+
         t = torch.arange(noise.shape[-1]).to(x.device) / self.sampling_rate
         ramp = torch.exp(-torch.exp(self.decay) * t)
         noise = noise * ramp
@@ -94,6 +126,10 @@ class Reverb(nn.Module):
         impulse = identity * (1 - wet) + noise * wet
 
         impulse = impulse / impulse.sum(-1, keepdim=True)
+        return impulse
+
+    def forward(self, x):
+        impulse = self.get_impulse(x)
 
         N = x.shape[-1]
         x = nn.functional.pad(x, (N, 0))
@@ -106,4 +142,4 @@ class Reverb(nn.Module):
 
         x = fft.irfft(x)[..., N:]
 
-        return x
+        return x, {"impulse": impulse}

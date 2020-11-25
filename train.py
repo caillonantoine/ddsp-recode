@@ -14,8 +14,6 @@ from udls import SimpleDataset
 from torch.utils.tensorboard import SummaryWriter
 
 from ddsp.model import DDSP
-from ddsp.synth import Harmonic, Noise
-from ddsp.viz import VizHook
 
 import soundfile as sf
 from einops import rearrange
@@ -42,16 +40,17 @@ def preprocess(name):
 
     step_size = config["data"]["block_size"] / config["data"]["sampling_rate"]
 
+    S = li.stft(x,
+                n_fft=2048,
+                hop_length=config["data"]["block_size"],
+                win_length=2048,
+                center=True)
+    S = abs(S)
+    loudness = li.feature.rms(S=S, center=True).reshape(-1)[..., :-1]
+    loudness = np.log(loudness + 1e-4)
+
     x = x.reshape(-1, N)
-    loudness = rearrange(
-        x,
-        "batch (block time) -> batch block time",
-        time=config["data"]["block_size"],
-    )**2
-    window = np.hamming(config["data"]["block_size"])
-    window = window / np.sum(window)
-    loudness = np.sum(loudness * window, -1)
-    loudness = np.log(loudness + 1e-10)
+    loudness = loudness.reshape(x.shape[0], -1)
 
     f0 = []
     crop = N // config["data"]["block_size"]
@@ -62,7 +61,7 @@ def preprocess(name):
                 sr,
                 step_size=1000 * step_size,
                 verbose=0,
-                center=False,
+                center=True,
                 viterbi=True,
             )[1][:crop])
     f0 = np.stack(f0, 0)
@@ -114,7 +113,7 @@ model = DDSP(
     config["recurrent_args"],
     config["harmonic_args"],
     config["noise_args"],
-    config["training"]["scales"],
+    config["scales"],
 ).to(device)
 opt = torch.optim.Adam(model.parameters(), config["training"]["lr"])
 
@@ -148,7 +147,9 @@ for e in range(config["training"]["epochs"]):
             log_loss = log_loss + (torch.log(sx + 1e-6) -
                                    torch.log(sy + 1e-6)).abs().mean()
 
-        loss = lin_loss + log_loss  # - .1 * torch.log(artifacts["amp"].mean())
+        loss = lin_loss + log_loss
+        if step < 1000:
+            loss -= .1 * torch.log(artifacts["amp"].mean())
 
         logging.debug("backward pass")
         loss.backward()
@@ -157,6 +158,24 @@ for e in range(config["training"]["epochs"]):
         opt.step()
 
         if not step % 100:
+            plt.plot(artifacts["impulse"].cpu().detach().reshape(-1))
+            plt.tight_layout()
+            writer.add_figure("impulse", plt.gcf(), step)
+
+            for scale, sx, sy in zip(config["scales"], Sx, Sy):
+                plt.subplot(121)
+                plt.imshow(sx[0].cpu().detach().numpy(),
+                           aspect="auto",
+                           origin="lower")
+                plt.colorbar()
+                plt.subplot(122)
+                plt.imshow(sy[0].cpu().detach().numpy(),
+                           aspect="auto",
+                           origin="lower")
+                plt.colorbar()
+                plt.tight_layout()
+                writer.add_figure(f"scale {scale}", plt.gcf(), step)
+
             alpha_n = artifacts["alphas"].cpu().detach().numpy()
             histogram = [
                 np.histogram(
