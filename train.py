@@ -157,7 +157,7 @@ for e in range(config["training"]["epochs"]):
         logging.debug("step")
         opt.step()
 
-        if not step % 100:
+        if not step % 1000:
             plt.plot(artifacts["impulse"].cpu().detach().reshape(-1))
             plt.tight_layout()
             writer.add_figure("impulse", plt.gcf(), step)

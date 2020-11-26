@@ -1,10 +1,10 @@
 # DDSP CONFIGURATION FILE
 training:
   batch: 16
-  name: "test_violin_harmonic_hilr"
+  name: "long_run"
   root: "runs"
   lr: .00001
-  epochs: 10000
+  epochs: 100000
 
 scales: [2048, 1024, 512, 256, 128, 64]
 
