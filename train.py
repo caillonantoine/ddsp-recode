@@ -215,11 +215,6 @@ for e in range(config["training"]["epochs"]):
                 step,
             )
 
-            # plt.plot(
-            #     artifacts["impulse"][0].reshape(-1).cpu().detach().numpy())
-            # plt.tight_layout()
-            # writer.add_figure("impulse", plt.gcf(), step)
-
             Sx = np.log(Sx[0][0].cpu().detach().numpy() + 1e-3)
             Sy = np.log(Sy[0][0].cpu().detach().numpy() + 1e-3)
 
