@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 from .base_layers import RecurrentBlock
-from .synth_bis import HarmonicSynth, NoiseSynth, Reverb
+from .synth import HarmonicSynth, NoiseSynth, Reverb
 from .complex_utils import complex_abs
 
 import torch.fft as fft
