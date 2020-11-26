@@ -41,12 +41,16 @@ def preprocess(name):
     step_size = config["data"]["block_size"] / config["data"]["sampling_rate"]
 
     S = li.stft(x,
-                n_fft=2048,
+                n_fft=512,
                 hop_length=config["data"]["block_size"],
-                win_length=2048,
+                win_length=512,
                 center=True)
     S = abs(S)
-    loudness = li.feature.rms(S=S, center=True).reshape(-1)[..., :-1]
+    loudness = li.feature.rms(
+        S=S,
+        frame_length=512,
+        center=True,
+    ).reshape(-1)[..., :-1]
     loudness = np.log(loudness + 1e-4)
 
     x = x.reshape(-1, N)

@@ -5,7 +5,7 @@ from einops import rearrange
 import numpy as np
 import matplotlib.pyplot as plt
 
-x, sr = li.load("runs/test_violin_harmonic_hilr/audio_000000.wav", 16000)
+x, sr = li.load("runs/long_run/audio_000000.wav", 16000)
 
 #%% RMS SIMPLE
 loudness = rearrange(
@@ -20,17 +20,17 @@ loudness = np.log(loudness + 1e-4)
 print(loudness.shape)
 
 plt.plot(loudness)
-plt.xlim([0, 2000])
+plt.xlim([0, 400])
 plt.show()
 # %% RMS SPEC
-S = li.stft(x, n_fft=2048, hop_length=160, win_length=2048, center=True)
+S = li.stft(x, n_fft=512, hop_length=160, win_length=512, center=True)
 S = abs(S)
-loudness = li.feature.rms(S=S, frame_length=2048,
+loudness = li.feature.rms(S=S, frame_length=512,
                           center=True).reshape(-1)[..., :-1]
 loudness = np.log(loudness + 1e-4)
 print(loudness.shape)
 
 plt.plot(loudness)
-plt.xlim([0, 2000])
+plt.xlim([0, 400])
 plt.show()
 # %%

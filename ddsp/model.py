@@ -62,7 +62,7 @@ class DDSP(nn.Module):
                     scale,
                     scale // 4,
                     scale,
-                    center=False,
+                    center=True,
                     return_complex=True,
                     window=torch.hamming_window(scale).to(x),
                 ).abs())
