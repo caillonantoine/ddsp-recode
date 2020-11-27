@@ -85,7 +85,6 @@ class NoiseSynth(nn.Module):
         # bands B N T
         bands = bands.transpose(1, 2)
         bands = fft.irfft(bands)
-
         bands = torch.roll(bands, self.n_band - 1, -1)
         bands = bands * self.window
         bands = nn.functional.pad(
@@ -93,7 +92,6 @@ class NoiseSynth(nn.Module):
             (0, self.upsampling - 2 * (self.n_band - 1)),
         )
         bands = torch.roll(bands, -self.n_band + 1, -1)
-
         noise = torch.rand_like(bands) * 2 - 1
 
         filt_noise = fft.irfft(fft.rfft(noise) * fft.rfft(bands))
@@ -105,7 +103,7 @@ class Reverb(nn.Module):
     def __init__(self, sampling_rate):
         super().__init__()
         self.wet = nn.Parameter(torch.tensor(0.))
-        self.decay = nn.Parameter(torch.tensor(4.))
+        self.decay = nn.Parameter(torch.tensor(2.))
         self.sampling_rate = sampling_rate
         self.impulse = nn.Parameter(
             torch.rand(1, 1, self.sampling_rate) * 2 - 1)

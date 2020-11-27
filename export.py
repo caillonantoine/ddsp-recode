@@ -7,7 +7,7 @@ import yaml
 
 
 class args(Config):
-    RUN = "runs/full_model"
+    RUN = None
     CACHE = False
 
 
