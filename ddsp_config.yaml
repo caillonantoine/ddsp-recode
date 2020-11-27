@@ -1,10 +1,12 @@
 # DDSP CONFIGURATION FILE
 training:
   batch: 16
-  name: "long_run"
+  name: "no_sqrt"
   root: "runs"
   lr: .00001
   epochs: 100000
+  noise_warm: 500
+  reverb_warm: -1
 
 scales: [2048, 1024, 512, 256, 128, 64]
 
@@ -24,7 +26,7 @@ recurrent_args:
 harmonic_args:
   sampling_rate: *sr
   upsampling: *block_size
-  n_harmonic: 101
+  n_harmonic: 16
   smooth_size: 127
 
 noise_args:

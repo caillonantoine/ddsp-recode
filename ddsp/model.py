@@ -31,7 +31,7 @@ class DDSP(nn.Module):
 
         self.scales = scales
 
-    def forward(self, pitch, loudness):
+    def forward(self, pitch, loudness, noise_pass=True, reverb_pass=True):
         hidden = self.recurrent_block(
             pitch.permute(0, 2, 1),
             loudness.permute(0, 2, 1),
@@ -41,15 +41,22 @@ class DDSP(nn.Module):
 
         amp = mod_sigmoid(self.amp_lin(hidden).permute(0, 2, 1))
         alphas = mod_sigmoid(self.alphas_lin(hidden).permute(0, 2, 1))
-        bands = mod_sigmoid(self.bands_lin(hidden).permute(0, 2, 1))
 
         harmonic, _art = self.harm_synth(amp, alphas, pitch)
         artifacts.update(_art)
 
-        noise = self.noise_synth(bands)
+        if noise_pass:
+            bands = mod_sigmoid(self.bands_lin(hidden).permute(0, 2, 1) - 5)
+            noise = self.noise_synth(bands)
+            signal = harmonic + noise
+        else:
+            signal = harmonic
 
-        mixdown, _art = self.reverb(harmonic + noise)
-        artifacts.update(_art)
+        if reverb_pass:
+            mixdown, _art = self.reverb(signal)
+            artifacts.update(_art)
+        else:
+            mixdown = signal
 
         return mixdown, artifacts
 
@@ -57,13 +64,14 @@ class DDSP(nn.Module):
         stfts = []
         for scale in self.scales:
             stfts.append(
-                torch.stft(
-                    x,
-                    scale,
-                    scale // 4,
-                    scale,
-                    center=True,
-                    return_complex=True,
-                    window=torch.hamming_window(scale).to(x),
-                ).abs())
+                abs(
+                    torch.stft(
+                        x,
+                        scale,
+                        scale // 4,
+                        scale,
+                        center=True,
+                        return_complex=True,
+                        window=torch.hamming_window(scale).to(x),
+                    )))
         return stfts

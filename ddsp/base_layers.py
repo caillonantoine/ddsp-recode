@@ -15,7 +15,7 @@ class MLP(nn.Module):
 
         for i in range(n_layers):
             net.append(nn.Linear(channels[i], channels[i + 1]))
-            net.append(nn.LayerNorm(channels[i + 1], elementwise_affine=False))
+            net.append(nn.LayerNorm(channels[i + 1]))
             net.append(nn.ReLU())
 
         self.net = nn.Sequential(*net)

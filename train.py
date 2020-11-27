@@ -121,6 +121,8 @@ model = DDSP(
 ).to(device)
 opt = torch.optim.Adam(model.parameters(), config["training"]["lr"])
 
+torch.backends.cudnn.benchmark = True
+
 step = 0
 for e in range(config["training"]["epochs"]):
     for x, f0, loudness in tqdm(trainloader):
@@ -134,7 +136,12 @@ for e in range(config["training"]["epochs"]):
         loudness = (loudness - mean_loudness) / std_loudness
 
         logging.debug("forward pass")
-        y, artifacts = model(f0, loudness)
+        y, artifacts = model(
+            f0,
+            loudness,
+            noise_pass=step > config["training"]["noise_warm"],
+            reverb_pass=step > config["training"]["reverb_warm"],
+        )
         y = y.squeeze(1)
 
         logging.debug("compute original multiscale")
@@ -148,8 +155,8 @@ for e in range(config["training"]["epochs"]):
         log_loss = 0
         for sx, sy in zip(Sx, Sy):
             lin_loss = lin_loss + (sx - sy).abs().mean()
-            log_loss = log_loss + (torch.log(sx + 1e-6) -
-                                   torch.log(sy + 1e-6)).abs().mean()
+            log_loss = log_loss + (torch.log(sx + 1e-4) -
+                                   torch.log(sy + 1e-4)).abs().mean()
 
         loss = lin_loss + log_loss
         if step < 1000:
@@ -162,9 +169,10 @@ for e in range(config["training"]["epochs"]):
         opt.step()
 
         if not step % 1000:
-            plt.plot(artifacts["impulse"].cpu().detach().reshape(-1))
-            plt.tight_layout()
-            writer.add_figure("impulse", plt.gcf(), step)
+            if "impulse" in artifacts:
+                plt.plot(artifacts["impulse"].cpu().detach().reshape(-1))
+                plt.tight_layout()
+                writer.add_figure("impulse", plt.gcf(), step)
 
             for scale, sx, sy in zip(config["scales"], Sx, Sy):
                 plt.subplot(121)
@@ -197,7 +205,6 @@ for e in range(config["training"]["epochs"]):
             plt.xlabel("Harmonic number")
             plt.ylabel("Density")
             plt.tight_layout()
-
             writer.add_figure(
                 "harmonic_repartition",
                 plt.gcf(),
