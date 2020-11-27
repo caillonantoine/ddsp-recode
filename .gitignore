@@ -12,3 +12,4 @@ notebooks/
 */build/
 *.mdb
 *.ts
+debug.py

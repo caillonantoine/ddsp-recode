@@ -10,3 +10,4 @@ tensorboard
 tensorflow
 lmdb
 einops
+effortless_config

@@ -25,7 +25,12 @@ class MLP(nn.Module):
 
 
 class RecurrentBlock(nn.Module):
-    def __init__(self, n_inputs, hidden_size, n_outputs, n_layers):
+    def __init__(self,
+                 n_inputs,
+                 hidden_size,
+                 n_outputs,
+                 n_layers,
+                 cache=False):
         super().__init__()
         self.n_inputs = n_inputs
         self.hidden_size = hidden_size
@@ -48,11 +53,20 @@ class RecurrentBlock(nn.Module):
             batch_first=True,
         )
 
+        if cache:
+            self.register_buffer("cache", torch.zeros(1, 1, hidden_size))
+        else:
+            self.register_buffer("cache", torch.tensor([]))
+
     def forward(self, pitch, loudness):
         pitch = self.in_mlps[0](pitch)
         loudness = self.in_mlps[1](loudness)
 
         x = torch.cat([pitch, loudness], -1)
-        x = self.gru(x)[0]
+        if self.cache.shape[0]:
+            x, h = self.gru(x, self.cache)
+            self.cache = h
+        else:
+            x = self.gru(x)[0]
 
         return self.out_mlp(x)

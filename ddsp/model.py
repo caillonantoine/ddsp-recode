@@ -93,6 +93,9 @@ class ScriptableDDSP(DDSP):
         noise = self.noise_synth(bands)
         signal = harmonic + noise
 
-        mixdown, _art = self.reverb(signal)
+        if self.recurrent_block.cache.shape[0]:
+            mixdown, _art = self.reverb(signal)
+        else:
+            mixdown = signal
 
         return mixdown
