@@ -1,7 +1,7 @@
 # DDSP CONFIGURATION FILE
 training:
   batch: 16
-  name: "no_sqrt"
+  name: "full_model"
   root: "runs"
   lr: .00001
   epochs: 100000
@@ -26,7 +26,7 @@ recurrent_args:
 harmonic_args:
   sampling_rate: *sr
   upsampling: *block_size
-  n_harmonic: 16
+  n_harmonic: 64
   smooth_size: 127
 
 noise_args:

@@ -6,7 +6,7 @@ from einops import rearrange
 
 
 def upsampling(x, factor):
-    return nn.functional.upsample(
+    return nn.functional.interpolate(
         x,
         mode="linear",
         scale_factor=factor,
@@ -18,7 +18,7 @@ class HarmonicSynth(nn.Module):
     def __init__(self, sampling_rate, upsampling, n_harmonic, smooth_size):
         super().__init__()
         self.sampling_rate = sampling_rate
-        self.upsampling = upsampling
+        self.register_buffer("upsampling", torch.tensor(upsampling))
         self.n_harmonic = n_harmonic
 
         win = torch.hamming_window(smooth_size)
@@ -35,9 +35,11 @@ class HarmonicSynth(nn.Module):
 
         h = x.shape[1]
 
-        x = rearrange(x, "b h t -> (b h) t").unsqueeze(1)
+        # x = rearrange(x, "b h t -> (b h) t").unsqueeze(1)
+        x = x.reshape(-1, 1, x.shape[-1])
         x = nn.functional.conv1d(x, self.smoothing_win)
-        x = rearrange(x.squeeze(1), "(b h) t -> b h t", h=h)
+        # x = rearrange(x.squeeze(1), "(b h) t -> b h t", h=h)
+        x = x.reshape(-1, h, x.shape[-1])
 
         return x
 

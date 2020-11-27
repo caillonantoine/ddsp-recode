@@ -75,3 +75,24 @@ class DDSP(nn.Module):
                         window=torch.hamming_window(scale).to(x),
                     )))
         return stfts
+
+
+class ScriptableDDSP(DDSP):
+    def forward(self, f0, lo):
+        hidden = self.recurrent_block(
+            f0.permute(0, 2, 1),
+            lo.permute(0, 2, 1),
+        )
+
+        amp = mod_sigmoid(self.amp_lin(hidden).permute(0, 2, 1))
+        alphas = mod_sigmoid(self.alphas_lin(hidden).permute(0, 2, 1))
+
+        harmonic = self.harm_synth(amp, alphas, f0)[0]
+
+        bands = mod_sigmoid(self.bands_lin(hidden).permute(0, 2, 1) - 5)
+        noise = self.noise_synth(bands)
+        signal = harmonic + noise
+
+        mixdown, _art = self.reverb(signal)
+
+        return mixdown

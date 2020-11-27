@@ -159,6 +159,10 @@ for e in range(config["training"]["epochs"]):
                                    torch.log(sy + 1e-4)).abs().mean()
 
         loss = lin_loss + log_loss
+
+        if torch.isnan(loss).any():
+            raise Exception("NAN")
+
         if step < 1000:
             loss -= .1 * torch.log(artifacts["amp"].mean())
 

@@ -11,3 +11,4 @@ notebooks/
 !showcase/*.wav
 */build/
 *.mdb
+*.ts
