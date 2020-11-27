@@ -8,3 +8,5 @@ soundfile>=0.10.3.post1
 torch>=1.7.0
 tensorboard
 tensorflow
+lmdb
+einops
