@@ -1,7 +1,7 @@
 # DDSP CONFIGURATION FILE
 training:
   batch: 16
-  name: "full_model"
+  name: "full_model_fast"
   root: "runs"
   lr: .00001
   epochs: 100000

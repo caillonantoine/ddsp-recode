@@ -98,7 +98,7 @@ class NoiseSynth(nn.Module):
         bands = torch.roll(bands, -self.n_band + 1, -1)
         noise = torch.rand_like(bands) * 2 - 1
 
-        filt_noise = fft.irfft(fft.rfft(noise) * fft.rfft(bands))
+        filt_noise = fft.irfft(fft.rfft(noise) * fft.rfft(bands)).contiguous()
 
         return filt_noise.reshape(filt_noise.shape[0], 1, -1)
 
@@ -122,13 +122,11 @@ class Reverb(nn.Module):
         ramp = torch.exp(-torch.exp(self.decay) * t)
         noise = noise * ramp
 
-        identity = torch.zeros_like(noise)
-        identity[..., 0] = 1
-
         wet = torch.sigmoid(self.wet)
-        impulse = identity * (1 - wet) + noise * wet
+        impulse = noise * wet
+        impulse[..., 0] = 1
 
-        impulse = impulse / impulse.sum(-1, keepdim=True)
+        # impulse = impulse / impulse.sum(-1, keepdim=True)
         return impulse
 
     def forward(self, x):
