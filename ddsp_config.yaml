@@ -5,7 +5,7 @@ training:
   root: "runs"
   lr: .00001
   epochs: 100000
-  noise_warm: 500
+  noise_warm: -1
   reverb_warm: -1
 
 scales: [2048, 1024, 512, 256, 128, 64]

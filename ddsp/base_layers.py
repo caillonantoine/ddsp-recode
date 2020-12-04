@@ -63,6 +63,7 @@ class RecurrentBlock(nn.Module):
         loudness = self.in_mlps[1](loudness)
 
         x = torch.cat([pitch, loudness], -1)
+        
         if self.cache.shape[0]:
             x, h = self.gru(x, self.cache)
             self.cache = h

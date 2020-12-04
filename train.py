@@ -178,6 +178,13 @@ for e in range(config["training"]["epochs"]):
                 plt.tight_layout()
                 writer.add_figure("impulse", plt.gcf(), step)
 
+            if "bands" in artifacts:
+                bands = artifacts["bands"][0].cpu().detach().numpy()
+                bands = np.log(bands + 1e-4)
+                plt.imshow(bands, aspect="auto")
+                plt.tight_layout()
+                writer.add_figure("bands", plt.gcf(), step)
+
             for scale, sx, sy in zip(config["scales"], Sx, Sy):
                 plt.subplot(121)
                 plt.imshow(sx[0].cpu().detach().numpy(),

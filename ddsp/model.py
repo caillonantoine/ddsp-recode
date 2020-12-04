@@ -46,6 +46,7 @@ class DDSP(nn.Module):
 
         if noise_pass:
             bands = mod_sigmoid(self.bands_lin(hidden).permute(0, 2, 1) - 5)
+            artifacts["bands"] = bands
             noise = self.noise_synth(bands)
             signal = harmonic + noise
         else:
