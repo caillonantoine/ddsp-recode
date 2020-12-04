@@ -83,7 +83,11 @@ class NoiseSynth(nn.Module):
 
     def forward(self, bands):
         # bands B N T
-        bands = bands.transpose(1, 2)
+        bands = bands.transpose(1, 2).contiguous()
+
+        bands = torch.stack([bands, torch.zeros_like(bands)], -1)
+        bands = torch.view_as_complex(bands)
+
         bands = fft.irfft(bands)
         bands = torch.roll(bands, self.n_band - 1, -1)
         bands = bands * self.window
