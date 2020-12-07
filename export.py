@@ -1,14 +1,31 @@
 import torch
-from ddsp.model import ScriptableDDSP
-from effortless_config import Config
-import soundfile as sf
-from os import path
 import yaml
+from effortless_config import Config
+from os import path
+from ddsp.model import DDSP
+
+
+def reshape_descriptor(x):
+    if len(x.shape) == 1:
+        x = x.reshape(1, -1, 1)
+    else:
+        x = x.reshape(x.shape[0], -1, 1)
+    return x
+
+
+class ScriptableModel(torch.nn.Module):
+    def __init__(self, ddsp):
+        super().__init__()
+        self.ddsp = ddsp
+
+    def forward(self, pitch, loudness):
+        pitch = reshape_descriptor(pitch)
+        loudness = reshape_descriptor(loudness)
+        return self.ddsp(pitch, loudness)
 
 
 class args(Config):
     RUN = None
-    CACHE = False
 
 
 args.parse_args()
@@ -16,30 +33,13 @@ args.parse_args()
 with open(path.join(args.RUN, "config.yaml"), "r") as config:
     config = yaml.safe_load(config)
 
-config["recurrent_args"].update({"cache": args.CACHE})
-
-ddsp = ScriptableDDSP(
-    recurrent_args=config["recurrent_args"],
-    harmonic_args=config["harmonic_args"],
-    noise_args=config["noise_args"],
-    scales=config["scales"],
-)
-
+ddsp = DDSP(**config["model"])
 state = ddsp.state_dict()
 pretrained = torch.load(path.join(args.RUN, "state.pth"), map_location="cpu")
 state.update(pretrained)
-
 ddsp.load_state_dict(state)
-ddsp.eval()
 
 name = path.basename(path.normpath(args.RUN))
-torch.jit.save(torch.jit.script(ddsp), f"{name}_script.ts")
 
-second = torch.randn(1, 1, 2 * config["harmonic_args"]["sampling_rate"])
-impulse = ddsp.reverb.get_impulse(second).cpu().detach().numpy().reshape(-1)
-
-sf.write(
-    f"{name}_impulse.wav",
-    impulse,
-    config["harmonic_args"]["sampling_rate"],
-)
+scripted_model = torch.jit.script(ddsp)
+torch.jit.save(scripted_model, f"ddsp_{name}_pretrained.ts")

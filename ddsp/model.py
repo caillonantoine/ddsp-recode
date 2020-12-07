@@ -1,101 +1,101 @@
 import torch
 import torch.nn as nn
-
-from .base_layers import RecurrentBlock
-from .synth import HarmonicSynth, NoiseSynth, Reverb
-
-import torch.fft as fft
-import math
+from .core import mlp, gru, scale_function, remove_above_nyquist, upsample
+from .core import harmonic_synth, amp_to_impulse_response, fft_convolve
 
 
-def mod_sigmoid(x):
-    return 2 * torch.sigmoid(x).pow(math.log(10)) + 1e-7
+class Reverb(nn.Module):
+    def __init__(self, length, sampling_rate, initial_wet=0, initial_decay=3):
+        super().__init__()
+        self.length = length
+        self.sampling_rate = sampling_rate
+
+        self.noise = nn.Parameter((torch.rand(length) * 2 - 1).unsqueeze(-1))
+        self.decay = nn.Parameter(torch.tensor(float(initial_decay)))
+        self.wet = nn.Parameter(torch.tensor(float(initial_wet)))
+
+        t = torch.arange(self.length) / self.sampling_rate
+        t = t.reshape(1, -1, 1)
+        self.register_buffer("t", t)
+
+    def build_impulse(self):
+        t = torch.exp(-nn.functional.softplus(-self.decay) * self.t * 500)
+        noise = self.noise * t
+        impulse = noise * torch.sigmoid(self.wet)
+        impulse[:, 0] = 1
+        return impulse
+
+    def forward(self, x):
+        lenx = x.shape[1]
+        impulse = self.build_impulse()
+        impulse = nn.functional.pad(impulse, (0, 0, 0, lenx - self.length))
+
+        x = fft_convolve(x.squeeze(-1), impulse.squeeze(-1)).unsqueeze(-1)
+
+        return x
 
 
 class DDSP(nn.Module):
-    def __init__(self, recurrent_args, harmonic_args, noise_args, scales):
+    def __init__(self, hidden_size, n_harmonic, n_bands, sampling_rate,
+                 block_size):
         super().__init__()
-        self.recurrent_block = RecurrentBlock(**recurrent_args)
+        self.register_buffer("sampling_rate", torch.tensor(sampling_rate))
+        self.register_buffer("block_size", torch.tensor(block_size))
 
-        feature_out = recurrent_args["hidden_size"]
+        self.in_mlps = nn.ModuleList([mlp(1, hidden_size, 3)] * 2)
+        self.gru = gru(2, hidden_size)
+        self.out_mlp = mlp(hidden_size + 2, hidden_size, 3)
 
-        self.amp_lin = nn.Linear(feature_out, 1)
-        self.alphas_lin = nn.Linear(feature_out, harmonic_args["n_harmonic"])
-        self.bands_lin = nn.Linear(feature_out, noise_args["n_band"])
+        self.proj_matrices = nn.ModuleList([
+            nn.Linear(hidden_size, n_harmonic + 1),
+            nn.Linear(hidden_size, n_bands),
+        ])
 
-        self.harm_synth = HarmonicSynth(**harmonic_args)
-        self.noise_synth = NoiseSynth(**noise_args)
+        self.reverb = Reverb(sampling_rate, sampling_rate)
 
-        self.reverb = Reverb(harmonic_args["sampling_rate"])
+    def forward(self, pitch, loudness):
+        hidden = torch.cat([
+            self.in_mlps[0](pitch),
+            self.in_mlps[1](loudness),
+        ], -1)
+        hidden = torch.cat([self.gru(hidden)[0], pitch, loudness], -1)
+        hidden = self.out_mlp(hidden)
 
-        self.scales = scales
+        # harmonic part
+        param = scale_function(self.proj_matrices[0](hidden))
 
-    def forward(self, pitch, loudness, noise_pass=True, reverb_pass=True):
-        hidden = self.recurrent_block(
-            pitch.permute(0, 2, 1),
-            loudness.permute(0, 2, 1),
+        total_amp = param[..., :1]
+        amplitudes = param[..., 1:]
+
+        amplitudes = remove_above_nyquist(
+            amplitudes,
+            pitch,
+            self.sampling_rate,
         )
+        amplitudes /= amplitudes.sum(-1, keepdim=True)
+        amplitudes *= total_amp
 
-        artifacts = {}
+        amplitudes = upsample(amplitudes, self.block_size)
+        pitch = upsample(pitch, self.block_size)
 
-        amp = mod_sigmoid(self.amp_lin(hidden).permute(0, 2, 1))
-        alphas = mod_sigmoid(self.alphas_lin(hidden).permute(0, 2, 1))
+        harmonic = harmonic_synth(pitch, amplitudes, self.sampling_rate)
 
-        harmonic, _art = self.harm_synth(amp, alphas, pitch)
-        artifacts.update(_art)
+        # noise part
+        param = scale_function(self.proj_matrices[1](hidden) - 5)
 
-        if noise_pass:
-            bands = mod_sigmoid(self.bands_lin(hidden).permute(0, 2, 1) - 5)
-            artifacts["bands"] = bands
-            noise = self.noise_synth(bands)
-            signal = harmonic + noise
-        else:
-            signal = harmonic
+        impulse = amp_to_impulse_response(param, self.block_size)
+        noise = torch.rand(
+            impulse.shape[0],
+            impulse.shape[1],
+            self.block_size,
+        ).to(impulse) * 2 - 1
 
-        if reverb_pass:
-            mixdown, _art = self.reverb(signal)
-            artifacts.update(_art)
-        else:
-            mixdown = signal
+        noise = fft_convolve(noise, impulse).contiguous()
+        noise = noise.reshape(noise.shape[0], -1, 1)
 
-        return mixdown, artifacts
-
-    def multiScaleStft(self, x):
-        stfts = []
-        for scale in self.scales:
-            stfts.append(
-                abs(
-                    torch.stft(
-                        x,
-                        scale,
-                        scale // 4,
-                        scale,
-                        center=True,
-                        return_complex=True,
-                        window=torch.hamming_window(scale).to(x),
-                    )))
-        return stfts
-
-
-class ScriptableDDSP(DDSP):
-    def forward(self, f0, lo):
-        hidden = self.recurrent_block(
-            f0.permute(0, 2, 1),
-            lo.permute(0, 2, 1),
-        )
-
-        amp = mod_sigmoid(self.amp_lin(hidden).permute(0, 2, 1))
-        alphas = mod_sigmoid(self.alphas_lin(hidden).permute(0, 2, 1))
-
-        harmonic = self.harm_synth(amp, alphas, f0)[0]
-
-        bands = mod_sigmoid(self.bands_lin(hidden).permute(0, 2, 1) - 5)
-        noise = self.noise_synth(bands)
         signal = harmonic + noise
 
-        if self.recurrent_block.cache.shape[0]:
-            mixdown, _art = self.reverb(signal)
-        else:
-            mixdown = signal
+        #reverb part
+        signal = self.reverb(signal)
 
-        return mixdown
+        return signal

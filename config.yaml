@@ -1,0 +1,21 @@
+data:
+  data_location: "/slow-2/antoine/johngarner"
+  extension: "wav"
+  signal_length: &samplingrate 64000
+
+preprocess:
+  sampling_rate: 16000
+  block_size: &blocksize 160
+  signal_length: *samplingrate
+  out_dir: /fast-1/tmp/john/
+
+model:
+  hidden_size: 512
+  n_harmonic: 101
+  n_bands: 65
+  sampling_rate: *samplingrate
+  block_size: *blocksize
+
+train:
+  scales: [2048, 1024, 512, 256, 128, 64]
+  overlap: .75
