@@ -11,4 +11,5 @@ notebooks/
 !showcase/*.wav
 *build
 *tmp
+*.ts
 *debug.py
