@@ -26,6 +26,7 @@ class ScriptableModel(torch.nn.Module):
 
 class args(Config):
     RUN = None
+    CACHE = False
 
 
 args.parse_args()
