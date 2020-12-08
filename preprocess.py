@@ -1,120 +1,84 @@
-import numpy as np
-import soundfile as sf
+import yaml
+import pathlib
 import librosa as li
+from ddsp.core import extract_loudness, extract_pitch
+from effortless_config import Config
+import numpy as np
 from tqdm import tqdm
-import os
-from torch_ddsp.hparams import preprocess
-from torch_ddsp.ddsp import NeuralSynth
+import numpy as np
+from os import makedirs, path
 import torch
-from glob import glob
-# from pyworld import dio
-import crepe
 
-multiScaleFFT = NeuralSynth().multiScaleFFT
-amp = lambda x: x[:,:,0]**2 + x[:,:,1]**2
 
-def getSmoothLoudness(x, block_size, kernel_size=8):
-    win = np.hamming(kernel_size)
+def get_files(data_location, extension, **kwargs):
+    return list(pathlib.Path(data_location).rglob(f"*.{extension}"))
 
-    x = x.reshape(-1, block_size)
-    lo = np.log(np.mean(x**2, -1) + 1e-15)
-    lo = lo.reshape(-1)
 
-    lo = np.convolve(lo, win, "same")
-    return lo
+def preprocess(f, sampling_rate, block_size, signal_length, **kwargs):
+    x, sr = li.load(f, sampling_rate)
+    N = (signal_length - len(x) % signal_length) % signal_length
+    x = np.pad(x, (0, N))
 
-def getFundamentalFrequency(x):
-    sr         = preprocess.samplerate
-    block_size = preprocess.block_size
-    hop = int(1000 * block_size / sr)
+    pitch = extract_pitch(x, sampling_rate, block_size)
+    loudness = extract_loudness(x, sampling_rate, block_size)
 
-    if preprocess.f0_estimation == "dio":
-        f0 = dio(x.astype(np.float64), sr,
-                 frame_period=hop,
-                 f0_floor=50,
-                 f0_ceil=2000)[0]
-    elif preprocess.f0_estimation == "crepe":
-        f0 = crepe.predict(x, sr, step_size=hop, verbose=False)[1]
+    x = x.reshape(-1, signal_length)
+    pitch = pitch.reshape(x.shape[0], -1)
+    loudness = loudness.reshape(x.shape[0], -1)
 
-    return f0[:preprocess.sequence_size].astype(np.float)
+    return x, pitch, loudness
 
-class BatchSoundFiles:
-    def __init__(self, wav_list):
-        self.wavs = wav_list
 
-    def read(self):
-        mod = preprocess.block_size * preprocess.sequence_size
-        for head,wav in enumerate(self.wavs):
-            wav = li.load(wav, preprocess.samplerate)[0]
-            wav = wav[:mod*(len(wav)//mod)].reshape(-1,mod)
-            for i in range(wav.shape[0]):
-                yield head,wav[i]
+class Dataset(torch.utils.data.Dataset):
+    def __init__(self, out_dir):
+        super().__init__()
+        self.signals = np.load(path.join(out_dir, "signals.npy"))
+        self.pitchs = np.load(path.join(out_dir, "pitchs.npy"))
+        self.loudness = np.load(path.join(out_dir, "loudness.npy"))
 
     def __len__(self):
-        mod = preprocess.block_size * preprocess.sequence_size
-        batch = 0
-        for wav in self.wavs:
-            temp = sf.SoundFile(wav)
-            N = (len(temp) * preprocess.samplerate) // temp.samplerate
-            batch += N//mod
-        return batch
+        return self.signals.shape[0]
+
+    def __getitem__(self, idx):
+        s = torch.from_numpy(self.signals[idx])
+        p = torch.from_numpy(self.pitchs[idx])
+        l = torch.from_numpy(self.loudness[idx])
+        return s, p, l
 
 
-def process(filename, block_size, sequence_size):
-    output = preprocess.output_dir
-    os.makedirs(output, exist_ok=True)
+def main():
+    class args(Config):
+        CONFIG = "config.yaml"
 
-    sound = BatchSoundFiles(glob(filename))
-    batch = len(sound)
-    print(f"Splitting data into {batch} examples of {sequence_size}-deep sequences of {block_size} samples.")
+    args.parse_args()
+    with open(args.CONFIG, "r") as config:
+        config = yaml.safe_load(config)
 
-    scales = preprocess.fft_scales
-    sp = []
-    for scale, ex_sp in zip(scales,multiScaleFFT(torch.randn(block_size * sequence_size),amp=amp)):
-        sp.append(np.memmap(f"{output}/sp_{scale}.npy",
-                            dtype=np.float32,
-                            shape=(batch, ex_sp.shape[0], ex_sp.shape[1]),
-                            mode="w+"))
+    files = get_files(**config["data"])
+    pb = tqdm(files)
 
-    lo        = np.zeros([batch,sequence_size])
-    f0        = np.zeros([batch, sequence_size])
-    raw_audio = np.zeros([batch, sequence_size*block_size])
-    index     = np.zeros([batch])
+    signals = []
+    pitchs = []
+    loudness = []
 
-    in_point  = 0
-    last_file = 0
-    for b, (file_index, x) in enumerate(tqdm(sound.read())):
-        index[b] = file_index
+    for f in pb:
+        pb.set_description(str(f))
+        x, p, l = preprocess(f, **config["preprocess"])
+        signals.append(x)
+        pitchs.append(p)
+        loudness.append(l)
 
-        for i,msstft in enumerate(multiScaleFFT(torch.from_numpy(x).float(), amp=amp)):
-            sp[i][b,:,:] = msstft.detach().numpy()
+    signals = np.concatenate(signals, 0).astype(np.float32)
+    pitchs = np.concatenate(pitchs, 0).astype(np.float32)
+    loudness = np.concatenate(loudness, 0).astype(np.float32)
 
-        lo[b,:] = getSmoothLoudness(x, preprocess.block_size, preprocess.kernel_size)
-        f0[b,:] = getFundamentalFrequency(x)
+    out_dir = config["preprocess"]["out_dir"]
+    makedirs(out_dir, exist_ok=True)
 
-        raw_audio[b,:] = x
-
-        if (file_index != last_file) or (b==batch-1):
-            # print(f"\nnormalization", in_point, b)
-            last_file = file_index
-
-            mean_loudness = np.mean(lo[in_point:b])
-            std_loudness  = np.std(lo[in_point:b])
-
-            lo[in_point:b] -= mean_loudness
-            lo[in_point:b] /= std_loudness
-
-            in_point = b
+    np.save(path.join(out_dir, "signals.npy"), signals)
+    np.save(path.join(out_dir, "pitchs.npy"), pitchs)
+    np.save(path.join(out_dir, "loudness.npy"), loudness)
 
 
-
-    np.save(f"{output}/lo.npy", lo)
-    np.save(f"{output}/f0.npy", f0)
-    np.save(f"{output}/index.npy", index)
-    np.save(f"{output}/raw_audio.npy", raw_audio)
-
-
-if __name__ == '__main__':
-    process(preprocess.input_filename,
-            preprocess.block_size,
-            preprocess.sequence_size)
+if __name__ == "__main__":
+    main()
