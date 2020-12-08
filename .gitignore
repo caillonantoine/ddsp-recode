@@ -13,3 +13,4 @@ notebooks/
 *tmp
 *.ts
 *debug.py
+*export*

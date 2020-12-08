@@ -1,12 +1,12 @@
 data:
-  data_location: "/slow-2/antoine/johngarner"
+  data_location: "/slow-2/antoine/saxo"
   extension: "wav"
 
 preprocess:
   sampling_rate: &samplingrate 16000
   signal_length: &signallength 64000
   block_size: &blocksize 160
-  out_dir: /fast-1/tmp/john/
+  out_dir: /fast-1/tmp/saxo/
 
 model:
   hidden_size: 512
