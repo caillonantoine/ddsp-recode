@@ -6,7 +6,7 @@ from effortless_config import Config
 from os import path
 from preprocess import Dataset
 from tqdm import tqdm
-from ddsp.core import multiscale_fft, safe_log
+from ddsp.core import multiscale_fft, safe_log, mean_std_loudness
 import soundfile as sf
 from einops import rearrange
 
@@ -38,6 +38,10 @@ dataloader = torch.utils.data.DataLoader(
     drop_last=True,
 )
 
+mean_loudness, std_loudness = mean_std_loudness(dataloader)
+config["data"]["mean_loudness"] = mean_loudness
+config["data"]["std_loudness"] = std_loudness
+
 writer = SummaryWriter(path.join(args.ROOT, args.NAME), flush_secs=20)
 
 with open(path.join(args.ROOT, args.NAME, "config.yaml"), "w") as out_config:
@@ -50,6 +54,8 @@ for e in tqdm(range(args.EPOCHS)):
         s = s.to(device)
         p = p.unsqueeze(-1).to(device)
         l = l.unsqueeze(-1).to(device)
+
+        l = (l - mean_loudness) / std_loudness
 
         y = model(p, l).squeeze(-1)
 

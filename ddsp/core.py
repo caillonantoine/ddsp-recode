@@ -11,6 +11,18 @@ def safe_log(x):
     return torch.log(x + 1e-7)
 
 
+@torch.no_grad()
+def mean_std_loudness(dataset):
+    mean = 0
+    std = 0
+    n = 0
+    for _, _, l in dataset:
+        n += 1
+        mean += (l.mean().item() - mean) / n
+        std += (l.std().item() - std) / n
+    return mean, std
+
+
 def multiscale_fft(signal, scales, overlap):
     stfts = []
     for s in scales:
@@ -53,7 +65,7 @@ def extract_loudness(signal, sampling_rate, block_size, n_fft=2048):
         win_length=n_fft,
         center=True,
     )
-    S = li.amplitude_to_db(abs(S))
+    S = np.log(abs(S) + 1e-7)
     f = li.fft_frequencies(sampling_rate, n_fft)
     a_weight = li.A_weighting(f)
 
