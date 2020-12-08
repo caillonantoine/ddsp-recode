@@ -49,6 +49,11 @@ with open(path.join(args.ROOT, args.NAME, "config.yaml"), "w") as out_config:
 
 opt = torch.optim.Adam(model.parameters(), lr=args.LR)
 step = 0
+
+best_loss = float("inf")
+mean_loss = 0
+n_element = 0
+
 for e in tqdm(range(args.EPOCHS)):
     for s, p, l in dataloader:
         s = s.to(device)
@@ -83,11 +88,19 @@ for e in tqdm(range(args.EPOCHS)):
         writer.add_scalar("loss", loss.item(), step)
         step += 1
 
+        n_element += 1
+        mean_loss += (loss.item() - mean_loss) / n_element
+
     if not e % 100:
-        torch.save(
-            model.state_dict(),
-            path.join(args.ROOT, args.NAME, "state.pth"),
-        )
+        if mean_loss < best_loss:
+            best_loss = mean_loss
+            torch.save(
+                model.state_dict(),
+                path.join(args.ROOT, args.NAME, "state.pth"),
+            )
+
+        mean_loss = 0
+        n_element = 0
 
         audio = torch.cat([s, y], -1).reshape(-1).detach().cpu().numpy()
 
