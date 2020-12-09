@@ -9,15 +9,19 @@ from tqdm import tqdm
 from ddsp.core import multiscale_fft, safe_log, mean_std_loudness
 import soundfile as sf
 from einops import rearrange
+from ddsp.utils import get_scheduler
+import numpy as np
 
 
 class args(Config):
     CONFIG = "config.yaml"
     NAME = "debug"
     ROOT = "runs"
-    EPOCHS = 1000000
+    STEPS = 500000
     BATCH = 16
-    LR = 1e-3
+    START_LR = 1e-3
+    STOP_LR = 1e-4
+    DECAY_OVER = 400000
 
 
 args.parse_args()
@@ -47,14 +51,24 @@ writer = SummaryWriter(path.join(args.ROOT, args.NAME), flush_secs=20)
 with open(path.join(args.ROOT, args.NAME, "config.yaml"), "w") as out_config:
     yaml.safe_dump(config, out_config)
 
-opt = torch.optim.Adam(model.parameters(), lr=args.LR)
-step = 0
+opt = torch.optim.Adam(model.parameters(), lr=args.START_LR)
+
+schedule = get_scheduler(
+    len(dataloader),
+    args.START_LR,
+    args.STOP_LR,
+    args.DECAY_OVER,
+)
+
+scheduler = torch.optim.lr_scheduler.LambdaLR(opt, schedule)
 
 best_loss = float("inf")
 mean_loss = 0
 n_element = 0
+step = 0
+epochs = int(np.ceil(args.STEPS / len(dataloader)))
 
-for e in tqdm(range(args.EPOCHS)):
+for e in tqdm(range(epochs)):
     for s, p, l in dataloader:
         s = s.to(device)
         p = p.unsqueeze(-1).to(device)
@@ -86,12 +100,15 @@ for e in tqdm(range(args.EPOCHS)):
         opt.step()
 
         writer.add_scalar("loss", loss.item(), step)
+
         step += 1
 
         n_element += 1
         mean_loss += (loss.item() - mean_loss) / n_element
 
-    if not e % 100:
+    if not e % 1000:
+        writer.add_scalar("lr", schedule(e), step)
+        scheduler.step()
         if mean_loss < best_loss:
             best_loss = mean_loss
             torch.save(
