@@ -1,19 +1,22 @@
 import torch
 import yaml
 from effortless_config import Config
-from os import path, makedirs
+from os import path, makedirs, system
 from ddsp.model import DDSP
 import soundfile as sf
+from preprocess import get_files
 
 torch.set_grad_enabled(False)
-
-EXPORT_DIR = "export"
-makedirs(EXPORT_DIR, exist_ok=True)
 
 
 class args(Config):
     RUN = None
-    CACHE = False
+    DATA = False
+    OUT_DIR = "export"
+
+
+args.parse_args()
+makedirs(args.OUT_DIR, exist_ok=True)
 
 
 class ScriptDDSP(torch.nn.Module):
@@ -27,8 +30,6 @@ class ScriptDDSP(torch.nn.Module):
         loudness = (loudness - self.mean_loudness) / self.std_loudness
         return self.ddsp(pitch, loudness)
 
-
-args.parse_args()
 
 with open(path.join(args.RUN, "config.yaml"), "r") as config:
     config = yaml.safe_load(config)
@@ -50,18 +51,24 @@ scripted_model = torch.jit.script(
     ))
 torch.jit.save(
     scripted_model,
-    path.join(EXPORT_DIR, f"ddsp_{name}_pretrained.ts"),
+    path.join(args.OUT_DIR, f"ddsp_{name}_pretrained.ts"),
 )
 
 impulse = ddsp.reverb.build_impulse().reshape(-1).numpy()
 sf.write(
-    path.join(EXPORT_DIR, f"ddsp_{name}_impulse.wav"),
+    path.join(args.OUT_DIR, f"ddsp_{name}_impulse.wav"),
     impulse,
     config["preprocess"]["sampling_rate"],
 )
 
 with open(
-        path.join(EXPORT_DIR, f"ddsp_{name}_config.yaml"),
+        path.join(args.OUT_DIR, f"ddsp_{name}_config.yaml"),
         "w",
 ) as config_out:
     yaml.safe_dump(config, config_out)
+
+if args.DATA:
+    makedirs(path.join(args.OUT_DIR, "data"), exist_ok=True)
+    file_list = get_files(**config["data"])
+    file_list = [str(f).replace(" ", "\\ ") for f in file_list]
+    system(f"cp {' '.join(file_list)} {path.normpath(args.OUT_DIR)}/data/")
