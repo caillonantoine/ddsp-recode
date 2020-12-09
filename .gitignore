@@ -14,3 +14,4 @@ notebooks/
 *.ts
 *debug.py
 *export*
+*.tar.gz

@@ -12,7 +12,7 @@ UPLOAD_FOLDER = "./tmp/"
 app = Flask(__name__)
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
-model = torch.jit.load("export/ddsp_saxoo_pretrained.ts")
+model = torch.jit.load("export/ddsp_johngarner_pretrained.ts")
 sampling_rate = model.ddsp.sampling_rate.item()
 block_size = model.ddsp.block_size.item()
 
