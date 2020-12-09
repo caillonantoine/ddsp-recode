@@ -60,7 +60,7 @@ schedule = get_scheduler(
     args.DECAY_OVER,
 )
 
-scheduler = torch.optim.lr_scheduler.LambdaLR(opt, schedule)
+# scheduler = torch.optim.lr_scheduler.LambdaLR(opt, schedule)
 
 best_loss = float("inf")
 mean_loss = 0
@@ -106,9 +106,9 @@ for e in tqdm(range(epochs)):
         n_element += 1
         mean_loss += (loss.item() - mean_loss) / n_element
 
-    if not e % 1000:
+    if not e % 100:
         writer.add_scalar("lr", schedule(e), step)
-        scheduler.step()
+        # scheduler.step()
         if mean_loss < best_loss:
             best_loss = mean_loss
             torch.save(
