@@ -1,12 +1,13 @@
 data:
-  data_location: "/slow-2/antoine/dataset/saxo"
+  data_location: "/fast-2/datasets/Solv4_strings_wav/audio/Violin/ordinario"
   extension: "wav"
 
 preprocess:
   sampling_rate: &samplingrate 16000
   signal_length: &signallength 64000
+  oneshot: true # crop every audio file to exactly signal length
   block_size: &blocksize 160
-  out_dir: /fast-1/tmp/saxo/
+  out_dir: /fast-1/tmp/solordinario/
 
 model:
   hidden_size: 512
