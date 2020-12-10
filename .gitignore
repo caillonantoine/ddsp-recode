@@ -13,5 +13,4 @@ notebooks/
 *tmp
 *.ts
 *debug.py
-*export*
 *.tar.gz
