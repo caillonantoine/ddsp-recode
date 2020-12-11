@@ -1,7 +1,7 @@
 runs="runs/johngarner runs/saxophone runs/solordinario"
 
 mkdir temp
-cp scripts/readme.md example.py temp/
+cp scripts/readme.md scripts/example.py temp/
 
 for run in $runs;
 do
