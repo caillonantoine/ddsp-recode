@@ -40,6 +40,21 @@ def multiscale_fft(signal, scales, overlap):
     return stfts
 
 
+def resample(x, factor):
+    batch, frame, channel = x.shape
+    x = x.permute(0, 2, 1).reshape(batch * channel, 1, frame)
+
+    window = torch.hann_window(factor * 2, device=x.device).reshape(1, 1, -1)
+    y = torch.zeros(x.shape[0], x.shape[1], factor * x.shape[2]).to(x)
+    y[..., ::factor] = x
+    y[..., -1:] = x[..., -1:]
+    y = torch.nn.functional.conv1d(y, window, padding=factor.item())[..., :-1]
+
+    y = y.reshape(batch, channel, factor * frame).permute(0, 2, 1)
+
+    return y
+
+
 def upsample(signal, factor):
     signal = signal.permute(0, 2, 1)
     signal = nn.functional.interpolate(signal, scale_factor=factor)

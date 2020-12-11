@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from .core import mlp, gru, scale_function, remove_above_nyquist, upsample
 from .core import harmonic_synth, amp_to_impulse_response, fft_convolve
+from .core import resample
 
 
 class Reverb(nn.Module):
@@ -75,7 +76,7 @@ class DDSP(nn.Module):
         amplitudes /= amplitudes.sum(-1, keepdim=True)
         amplitudes *= total_amp
 
-        amplitudes = upsample(amplitudes, self.block_size)
+        amplitudes = resample(amplitudes, self.block_size)
         pitch = upsample(pitch, self.block_size)
 
         harmonic = harmonic_synth(pitch, amplitudes, self.sampling_rate)
