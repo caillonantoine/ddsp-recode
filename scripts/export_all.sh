@@ -1,6 +1,7 @@
 runs="runs/johngarner runs/saxophone runs/solordinario"
 
 mkdir temp
+cp scripts/readme.md example.py temp/
 
 for run in $runs;
 do
@@ -44,7 +45,6 @@ def extract_pitch(signal, sampling_rate, block_size):
         viterbi=True,
     )
     return f0[1].reshape(-1)[:-1]" > descriptors.py
-
 
 tar -czf ../ddsp.tar.gz *
 cd ../
