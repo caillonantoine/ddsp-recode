@@ -76,7 +76,7 @@ class DDSP(nn.Module):
         amplitudes /= amplitudes.sum(-1, keepdim=True)
         amplitudes *= total_amp
 
-        amplitudes = resample(amplitudes, self.block_size)
+        amplitudes = resample(amplitudes, self.block_size.item())
         pitch = upsample(pitch, self.block_size)
 
         harmonic = harmonic_synth(pitch, amplitudes, self.sampling_rate)

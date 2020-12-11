@@ -1,4 +1,4 @@
-runs="runs/johngarner_slow runs/sax_full runs/sol_ordinario"
+runs="runs/johngarner runs/saxophone runs/solordinario"
 
 mkdir temp
 
